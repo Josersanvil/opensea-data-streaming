@@ -1,3 +1,7 @@
+# Don't keep the data from the stream except for .gitkeep
+messages/*
+!messages/.gitkeep
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
