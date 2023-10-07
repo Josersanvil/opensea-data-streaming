@@ -42,7 +42,7 @@ async def heartbeat(socket: WebSocketClientProtocol):
 
 
 async def handle_terminate(sig, socket):
-    logging.warn(f"Received {signal.Signals(sig).name}. Closing connection...")
+    logging.warning(f"Received {signal.Signals(sig).name}. Closing connection...")
     # Close the file gracefully
     fb.close()
     # Close the socket gracefully
