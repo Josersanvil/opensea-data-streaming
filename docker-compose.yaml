@@ -1,0 +1,26 @@
+# Docker compose file for local PySpark 
+version: '3.7'
+
+services:
+  spark:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./workdir:/home/jovyan/workdir
+    working_dir: /home/jovyan/workdir
+    command:
+      - start-notebook.sh
+      - --LabApp.token=''
+      - --NotebookApp.token=''
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - GRANT_SUDO=yes
+      - NB_UID=1000
+      - NB_GID=100
+      - CHOWN_HOME=yes
+      - CHOWN_EXTRA_OPTS='-R'
+      - CHOWN_HOME_OPTS='-R'
+      - PYTHONPATH=/usr/local/spark/python/lib/py4j-0.10.9.7-src.zip:/usr/local/spark/python

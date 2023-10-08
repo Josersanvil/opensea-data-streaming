@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 import json
 import logging
 import os
@@ -89,4 +90,13 @@ async def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--log-level",
+        "-l",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+    )
+    args = parser.parse_args()
+    logging.getLogger().setLevel(args.log_level)
     asyncio.run(main())
