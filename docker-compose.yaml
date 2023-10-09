@@ -3,18 +3,20 @@ version: '3.7'
 
 services:
   spark:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: jupyter/pyspark-notebook:hub-4.0.2
     ports:
       - "8888:8888"
     volumes:
-      - ./workdir:/home/jovyan/workdir
+      - ./workdir:/home/jovyan/workdir:rw
     working_dir: /home/jovyan/workdir
+    networks:
+      - app-network
     command:
       - start-notebook.sh
       - --LabApp.token=''
       - --NotebookApp.token=''
+      - --NotebookApp.allow_origin='*'
+      - --NotebookApp.ip='0.0.0.0'
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - GRANT_SUDO=yes
@@ -24,3 +26,36 @@ services:
       - CHOWN_EXTRA_OPTS='-R'
       - CHOWN_HOME_OPTS='-R'
       - PYTHONPATH=/usr/local/spark/python/lib/py4j-0.10.9.7-src.zip:/usr/local/spark/python
+
+  stream:
+    image: jupyter/pyspark-notebook:python-3.10
+    volumes:
+      - ./workdir:/home/jovyan/workdir:rw
+    working_dir: /home/jovyan/workdir
+    networks:
+      - app-network
+    command:
+      - spark-submit
+      - stream.py
+      - --host=socket_stream
+      - --port=9999
+
+  socket_stream:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./workdir:/home/jovyan/workdir:rw
+    working_dir: /home/jovyan/workdir
+    networks:
+      - app-network
+    command: "bash -c 'python retrieve_events.py -o - | ncat -lk 9999'"
+    healthcheck:
+      test: [ "CMD", "ncat", "-z", "localhost", "9999" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app-network:
+    driver: bridge
