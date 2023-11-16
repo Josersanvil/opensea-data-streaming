@@ -41,15 +41,16 @@ if __name__ == "__main__":
     # Parse JSON data from the stream
     parsed_df = socket_df.selectExpr(
         "CAST(value AS STRING) as event_json",
+        "get_json_object(value, '$.payload.event_type') as event_type",
         "get_json_object(value, '$.payload.payload.collection.slug') as collection_slug",
-        "to_timestamp(get_json_object(value, '$.payload.sent_at')) as sent_at",
+        "to_timestamp(get_json_object(value, '$.payload.event_timestamp')) as event_timestamp",
     )
     # Aggregate the data
     agg_df = parsed_df.groupBy(
         F.window(
-            "sent_at", "30 seconds", "10 seconds"
-        ),  # Every 10 seconds, aggregate the data from the last 30 seconds
-        "collection_slug",
+            "event_timestamp", "1 hour", "1 minute"
+        ),  # Every minute, aggregate the data from the last hour
+        "event_type",
     ).count()
     # Write the query to the console
     query = (

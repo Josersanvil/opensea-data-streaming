@@ -136,7 +136,9 @@ if __name__ == "__main__":
     payload = {
         "topic": f"collection:{collection}",
         "event": "phx_join",
-        "payload": {},
+        "payload": {
+            "event_type": "item_transferred",
+        },
         "ref": 0,
     }
     fb = None
