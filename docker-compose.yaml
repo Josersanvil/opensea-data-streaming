@@ -86,7 +86,7 @@ services:
   cassandra:
     image: docker.io/bitnami/cassandra:4.1
     ports:
-      - '7000:7000'
+      # - '7000:7000' # Internode communication
       - '9042:9042'
     volumes:
       - 'cassandra_data:/bitnami'
