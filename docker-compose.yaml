@@ -2,6 +2,7 @@
 version: '3.7'
 
 services:
+  # === Jupyter Notebook ===
   notebook:
     build:
       context: ./docker/
@@ -90,12 +91,13 @@ services:
       - '9042:9042'
     volumes:
       - 'cassandra_data:/bitnami'
+    profiles:
+      - cassandra
+      - all
     environment:
       - CASSANDRA_SEEDS=cassandra
       - CASSANDRA_PASSWORD_SEEDER=yes
       - CASSANDRA_PASSWORD=cassandra
-    profiles:
-      - cassandra
     healthcheck:
       test:
         [
@@ -116,19 +118,23 @@ services:
   flink-jobmanager:
     image: flink:1.18.0
     hostname: jobmanager
+    profiles:
+      - flink
+      - all
     ports:
       - "8081:8081"
     command: jobmanager
     environment:
       FLINK_PROPERTIES: "jobmanager.rpc.address: jobmanager"
-    profiles:
-      - flink
     volumes:
       - .:/home
 
   flink-taskmanager:
     image: flink:1.18.0
     hostname: taskmanager
+    profiles:
+      - flink
+      - all
     depends_on:
       - flink-jobmanager
     command: taskmanager
@@ -141,8 +147,6 @@ services:
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
         taskmanager.numberOfTaskSlots: 4
-    profiles:
-      - flink
 
   # === Apache Kafka ===
   zookeeper:
@@ -150,6 +154,7 @@ services:
     hostname: zookeeper
     profiles:
       - kafka
+      - all
     # ports:
     #   - "2181:2181"
     environment:
@@ -162,6 +167,7 @@ services:
     hostname: kafka
     profiles:
       - kafka
+      - all
     # ports:
     #   - "9092:9092"
     #   - "29092:29092"
@@ -186,15 +192,15 @@ services:
   kafka-schema-registry:
     image: confluentinc/cp-schema-registry:7.3.2
     hostname: kafka-schema-registry
-    container_name: kafka-schema-registry
+    profiles:
+      - kafka
+      - all
     # ports:
     # - "8091:8081"
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
       SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-    profiles:
-      - kafka
     depends_on:
       - zookeeper
       - kafka
@@ -202,17 +208,17 @@ services:
   kafka-rest-proxy:
     image: confluentinc/cp-kafka-rest:7.3.2
     hostname: kafka-rest-proxy
-    container_name: kafka-rest-proxy
+    profiles:
+      - kafka
+      - all
     # ports:
     #   - "8082:8082"
     environment:
-      # KAFKA_REST_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_REST_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
       KAFKA_REST_SCHEMA_REGISTRY_URL: http://kafka-schema-registry:8081/
       KAFKA_REST_HOST_NAME: kafka-rest-proxy
       KAFKA_REST_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
-    profiles:
-      - kafka
     depends_on:
       - zookeeper
       - kafka
@@ -222,6 +228,9 @@ services:
     image: confluentinc/cp-kafka-connect:7.3.2
     hostname: kafka-connect
     container_name: kafka-connect
+    profiles:
+      - kafka
+      - all
     # ports:
     #   - "8083:8083"
     environment:
@@ -246,8 +255,6 @@ services:
       CONNECT_PLUGIN_PATH: '/usr/share/java,/etc/kafka-connect/jars,/usr/share/confluent-hub-components'
     volumes:
       - ./connectors:/etc/kafka-connect/jars/
-    profiles:
-      - kafka
     depends_on:
       - zookeeper
       - kafka
@@ -266,15 +273,15 @@ services:
   ksqldb-server:
     image: confluentinc/cp-ksqldb-server:7.3.2
     hostname: ksqldb-server
-    container_name: ksqldb-server
+    profiles:
+      - kafka
+      - all
     # ports:
     #   - "8088:8088"
     environment:
       KSQL_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
       KSQL_LISTENERS: http://0.0.0.0:8088/
       KSQL_KSQL_SERVICE_ID: ksqldb-server_
-    profiles:
-      - kafka
     depends_on:
       - zookeeper
       - kafka
@@ -283,15 +290,15 @@ services:
   conduktor-db:
     image: postgres:14
     hostname: conduktor-db
-    container_name: conduktor-db
+    profiles:
+      - kafka
+      - all
     environment:
       POSTGRES_USER: conduktor
       POSTGRES_PASSWORD: conduktor
       POSTGRES_DB: conduktor
     volumes:
       - conduktor_db_data:/var/lib/postgresql/data
-    profiles:
-      - kafka
 
   conduktor:
     image: conduktor/conduktor-platform:1.19.1
@@ -299,6 +306,9 @@ services:
       - "8090:8080"
     volumes:
       - conduktor_data:/var/conduktor
+    profiles:
+      - kafka
+      - all
     environment:
       CDK_ORGANIZATION_NAME: "demo"
       CDK_ADMIN_EMAIL: "admin@admin.io"
@@ -311,8 +321,6 @@ services:
       CDK_CLUSTERS_0_SCHEMAREGISTRY_URL: "http://kafka-schema-registry:8081"
       CDK_CLUSTERS_0_KAFKACONNECTS_0_URL: "http://kafka-connect:8083"
       CDK_CLUSTERS_0_KAFKACONNECTS_0_NAME: "full stack kafka connect"
-    profiles:
-      - kafka
     depends_on:
       - conduktor-db
 
