@@ -1,33 +1,40 @@
-import asyncio
 import argparse
+import asyncio
 import json
 import logging
 import os
 import signal
+import threading
 from datetime import datetime
-from typing import TextIO, Any
+from typing import Any, Callable, Optional, TextIO, Union
 
 import dotenv
-from websockets.client import connect, WebSocketClientProtocol
+from websockets.client import WebSocketClientProtocol, connect
 
 opensea_main_socket = "wss://stream.openseabeta.com/socket/websocket"
 opensea_test_socket = "wss://testnets-stream.openseabeta.com/socket/websocket"
 
 
-class WebSocketClient:
+class OpenSeaClient:
     """
-    A simple WebSocket client implementation using websockets
-    to retrieve events from OpenSea.
+    A simple WebSocket client implementation to retrieve events from the OpenSea Web Stream.
 
+    @param payload: The payload to send to the socket.
+        See https://docs.opensea.io/reference/websockets for more information.
     @param data_file: The file to write the messages to. If None, messages will not be written to a file.
     """
 
-    def __init__(self, payload: dict[str, Any], data_file: TextIO | str | None = None):
+    def __init__(
+        self, payload: dict[str, Any], data_file: Optional[Union[TextIO, str]] = None
+    ):
         self._logger = self.init_logger()
         self.payload = payload
         self.data_file: TextIO | None = data_file  # type: ignore
         if isinstance(data_file, str):
             self.data_file = open(data_file, "a")
+        self._message_processors = [
+            self.write_message_to_data_file,
+        ]
 
     @property
     def logger(self) -> logging.Logger:
@@ -47,6 +54,20 @@ class WebSocketClient:
     @classmethod
     def get_logger(cls):
         return logging.getLogger(f"{__name__}.{cls.__name__}")
+
+    @property
+    def message_processors(self) -> list[Callable[[dict[str, Any]], None]]:
+        """
+        A list of functions that will be called with the message as the only argument.
+        The functions will be called in different threads.
+        """
+        return self._message_processors
+
+    @message_processors.setter
+    def message_processors(
+        self, message_processors: list[Callable[[dict[str, Any]], None]]
+    ):
+        self._message_processors = message_processors
 
     async def heartbeat(self, socket: WebSocketClientProtocol):
         while True:
@@ -68,12 +89,17 @@ class WebSocketClient:
             self.data_file.close()
         await socket.close()
 
-    async def retrieve_messages(self, socket: WebSocketClientProtocol):
+    async def process_messages(self, socket: WebSocketClientProtocol):
         async for message in socket:
             response = json.loads(message)
             self.logger.info(response)
-            if self.data_file:
-                self.data_file.write(json.dumps(response) + "\n")
+            # Process messages in different threads
+            for processor in self.message_processors:
+                threading.Thread(target=processor, args=(response,)).start()
+
+    def write_message_to_data_file(self, message: dict[str, Any]):
+        if self.data_file:
+            self.data_file.write(json.dumps(message) + "\n")
 
     def get_endpoint(self):
         dotenv.load_dotenv()
@@ -84,6 +110,12 @@ class WebSocketClient:
         return f"{opensea_test_socket}?token={api_key}"
 
     async def run(self):
+        """
+        Opens a connection to the OpenSea Web Socket and retrieves messages from it
+        to write them to the data file.
+        The connection is kept alive by sending a heartbeat every 30 seconds,
+        it is closed when a SIGINT or SIGTERM signal is received.
+        """
         socket_endpoint = self.get_endpoint()
         async with connect(socket_endpoint) as socket:
             loop = asyncio.get_running_loop()
@@ -96,7 +128,7 @@ class WebSocketClient:
                 )
 
             await socket.send(json.dumps(self.payload))
-            tasks = [self.heartbeat(socket), self.retrieve_messages(socket)]
+            tasks = [self.heartbeat(socket), self.process_messages(socket)]
             await asyncio.gather(*tasks)
 
 
@@ -150,7 +182,7 @@ if __name__ == "__main__":
         ts = round(datetime.utcnow().timestamp())
         filename = f"{ts}_messages.jsonl"
         fb = open(os.path.join(args.outdir, filename), "a")
-    client = WebSocketClient(payload, fb)
+    client = OpenSeaClient(payload, fb)
     client.logger.setLevel(args.log_level)
     if args.silent:
         client.logger.setLevel(logging.CRITICAL)
