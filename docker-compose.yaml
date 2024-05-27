@@ -2,7 +2,18 @@
 version: '3.7'
 
 services:
-  # === Jupyter Notebook ===
+  # === Streaming application
+  stream:
+    build:
+      context: .
+      dockerfile: ./docker/socket/Dockerfile
+    env_file:
+      - .env
+    # The entrypoint sends the messages to the logs, we need to pipe them to a socket
+    entrypoint: /bin/bash -c "python opensea_client.py -o - | nc -lk -p 9999"
+    ports:
+      - "9999:9999"
+      # === Jupyter Notebook ===
   notebook:
     build:
       context: ./docker/
@@ -82,6 +93,17 @@ services:
       - MINIO_ROOT_PASSWORD=minio123
       - MINIO_ACCESS_KEY=minio
       - MINIO_SECRET_KEY=minio123
+
+  # Create buckets
+  minio-bucket:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      [
+        "mc alias set minio http://minio:9000 minio minio123 && mc mb minio/processed-data && mc mb minio/raw-data"
+      ]
 
   # === Apache Cassandra ===
   cassandra:

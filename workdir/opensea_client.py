@@ -6,6 +6,7 @@ import os
 import signal
 import threading
 from datetime import datetime
+from datetime import timezone as tz
 from typing import Any, Callable, Optional, TextIO, Union
 
 import dotenv
@@ -83,11 +84,11 @@ class OpenSeaClient:
 
     async def handle_terminate(self, sig, socket: WebSocketClientProtocol):
         self.logger.warning(
-            f"Received {signal.Signals(sig).name}. Closing connection..."
+            f"Received {signal.Signals(sig).name}. Please wait while the connection is closed..."
         )
+        await socket.close()
         if self.data_file:
             self.data_file.close()
-        await socket.close()
 
     async def process_messages(self, socket: WebSocketClientProtocol):
         async for message in socket:
@@ -179,7 +180,7 @@ if __name__ == "__main__":
     elif args.outdir:
         if not os.path.exists(args.outdir):
             os.makedirs(args.outdir)
-        ts = round(datetime.utcnow().timestamp())
+        ts = round(datetime.now(tz.utc).timestamp())
         filename = f"{ts}_messages.jsonl"
         fb = open(os.path.join(args.outdir, filename), "a")
     client = OpenSeaClient(payload, fb)

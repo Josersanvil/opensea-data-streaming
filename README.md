@@ -2,6 +2,8 @@
 
 A scalable Python app that analyses NFT data from OpenSea in real time using open source technologies.
 
+See: [OpenSea Stream API Overview](https://docs.opensea.io/reference/stream-api-overview)
+
 ## Setup
 
 ### Docker Compose

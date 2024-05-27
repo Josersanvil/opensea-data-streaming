@@ -1,14 +1,12 @@
 import argparse
 
-from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
+from pyspark.sql import SparkSession
 
 
 def get_argparser():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--host",
-    )
+    parser.add_argument("--host", default="localhost")
     parser.add_argument(
         "--port",
         "-p",
