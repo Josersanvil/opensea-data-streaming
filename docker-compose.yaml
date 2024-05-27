@@ -13,19 +13,24 @@ services:
     entrypoint: /bin/bash -c "python opensea_client.py -o - | nc -lk -p 9999"
     ports:
       - "9999:9999"
-      # === Jupyter Notebook ===
+
+  # === Jupyter Notebook ===
   notebook:
     build:
-      context: ./docker/
-      dockerfile: ./notebook/Dockerfile
+      context: ./docker
+      dockerfile: ./spark/Dockerfile
     volumes:
-      - ./workdir:/home/jovyan/work
-      - ./docker/conf/spark-defaults.conf:/usr/local/spark/conf/spark-defaults.conf
+      - ./workdir:/app
+      - ./docker/conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
     user: root
     command:
-      - start-notebook.sh
-      - --LabApp.token=''
+      - jupyter
+      - lab
       - --NotebookApp.token=''
+      - --NotebookApp.disable_check_xsrf=True
+      - --NotebookApp.password=''
+      - --ip=0.0.0.0
+      - --allow-root
     environment:
       - JUPYTER_ENABLE_LAB="yes"
       - GRANT_SUDO="yes"
@@ -46,7 +51,8 @@ services:
       - SPARK_SSL_ENABLED=no
       - SPARK_USER=spark
     ports:
-      - '8080:8080'
+      - "8080:8080"
+      - "8081:8081"
     volumes:
       - ./docker/conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
     healthcheck:
