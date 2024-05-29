@@ -1,0 +1,9 @@
+docker
+docker/**/*
+connectors
+connectors/**/*
+.vscode
+.vscode/**/*
+build
+build/**/*
+

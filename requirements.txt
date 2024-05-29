@@ -2,4 +2,4 @@ pyspark==3.5.0
 websockets==11.0.3
 python-dotenv==1.0.0
 notebook==7.0.6
-
+confluent-kafka==2.4.0

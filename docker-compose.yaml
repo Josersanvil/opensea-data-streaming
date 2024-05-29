@@ -9,12 +9,16 @@ services:
       dockerfile: ./docker/socket/Dockerfile
     env_file:
       - .env
-    # The entrypoint sends the messages to the logs, we need to pipe them to a socket
-    entrypoint: /bin/bash -c "python opensea_client.py -o - | nc -lk -p 9999"
-    ports:
-      - "9999:9999"
-
-  # === Jupyter Notebook ===
+    profiles:
+      - kafka
+    command:
+      - --kafka-topic=OpenSeaRawEvents
+      - --kafka-broker=kafka:19092
+      - --kafka-client-id=opensea-spark-streaming
+      - -l=INFO
+    depends_on:
+      - create-kafka-topic-raw-events
+    # === Jupyter Notebook ===
   notebook:
     build:
       context: ./docker
@@ -142,40 +146,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # === Apache Flink ===
-  flink-jobmanager:
-    image: flink:1.18.0
-    hostname: jobmanager
-    profiles:
-      - flink
-      - all
-    ports:
-      - "8081:8081"
-    command: jobmanager
-    environment:
-      FLINK_PROPERTIES: "jobmanager.rpc.address: jobmanager"
-    volumes:
-      - .:/home
-
-  flink-taskmanager:
-    image: flink:1.18.0
-    hostname: taskmanager
-    profiles:
-      - flink
-      - all
-    depends_on:
-      - flink-jobmanager
-    command: taskmanager
-    deploy:
-      replicas: 2
-    volumes:
-      - .:/home
-    environment:
-      - |
-        FLINK_PROPERTIES=
-        jobmanager.rpc.address: jobmanager
-        taskmanager.numberOfTaskSlots: 4
-
   # === Apache Kafka ===
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.2
@@ -214,6 +184,8 @@ services:
       KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
       KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
+    volumes:
+      - ./docker/monitoring/jmx-exporter:/usr/share/jmx-exporter
     depends_on:
       - zookeeper
 
@@ -229,6 +201,8 @@ services:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
       SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    volumes:
+      - ./docker/monitoring/jmx-exporter:/usr/share/jmx-exporter
     depends_on:
       - zookeeper
       - kafka
@@ -282,7 +256,7 @@ services:
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
       CONNECT_PLUGIN_PATH: '/usr/share/java,/etc/kafka-connect/jars,/usr/share/confluent-hub-components'
     volumes:
-      - ./connectors:/etc/kafka-connect/jars/
+      - ./docker/monitoring/jmx-exporter:/usr/share/jmx-exporter
     depends_on:
       - zookeeper
       - kafka
@@ -313,6 +287,29 @@ services:
     depends_on:
       - zookeeper
       - kafka
+
+  # Create topics
+  create-kafka-topic-raw-events:
+    image: confluentinc/cp-kafka:7.3.2
+    depends_on:
+      - kafka
+    profiles:
+      - kafka
+      - all
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - "kafka-topics --create --topic OpenSeaRawEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
+
+  create-kafka-topic-enriched-events:
+    image: confluentinc/cp-kafka:7.3.2
+    depends_on:
+      - kafka
+    profiles:
+      - kafka
+      - all
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - "kafka-topics --create --topic OpenSeaEnrichedEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
 
   # === Conduktor (For Kafka) ===
   conduktor-db:
@@ -352,8 +349,39 @@ services:
     depends_on:
       - conduktor-db
 
+  # === Prometheus and Grafana ===
+  prometheus:
+    image: prom/prometheus:v2.47.2
+    ports:
+      - "9090:9090"
+    profiles:
+      - monitoring
+      - all
+    volumes:
+      - ./docker/monitoring/prometheus:/etc/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    profiles:
+      - monitoring
+      - all
+    ports:
+      - "19093:9093"
+
+  grafana:
+    image: grafana/grafana:9.5.19
+    profiles:
+      - monitoring
+      - all
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/monitoring/grafana/:/etc/grafana/provisioning/
+
 volumes:
   cassandra_data:
   minio_data:
   conduktor_db_data:
   conduktor_data:
+  grafana-data:

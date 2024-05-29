@@ -12,8 +12,10 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Copy the source code
-COPY ./workdir/ /app
+COPY . /app
 WORKDIR /app
 
+RUN pip install .
+
 # Run the application
-ENTRYPOINT ["python", "opensea_client.py"]
+ENTRYPOINT ["opensea-client"]
