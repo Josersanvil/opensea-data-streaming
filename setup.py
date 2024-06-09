@@ -18,7 +18,6 @@ if __name__ == "__main__":
         install_requires=read_requirements(),
         package_dir={"": "src"},
         entry_points={
-            # Add the entry for the main script in opensea_client.cli.__main__.py
             "console_scripts": [
                 "opensea-client = opensea_client.cli.main:main",
             ],

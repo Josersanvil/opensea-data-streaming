@@ -1,11 +1,9 @@
 import json
 import logging
 import os
-from hashlib import sha256
 from typing import Any, Optional
 
 from confluent_kafka import Producer
-from confluent_kafka.admin import AdminClient
 
 from opensea_client.processors.base import MessageProcessor
 
