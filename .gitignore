@@ -2,6 +2,10 @@
 workdir/messages/*
 !workdir/messages/.gitkeep
 
+# IDE stuff
+.idea/
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
