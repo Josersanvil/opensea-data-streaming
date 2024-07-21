@@ -1,5 +1,4 @@
 # Docker compose file for local PySpark 
-version: '3.7'
 
 services:
   # === Streaming application

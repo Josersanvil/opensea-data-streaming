@@ -9,7 +9,7 @@ from opensea_client.client import OpenSeaClient
 from opensea_client.dispatchers.kafka import KafkaTopicDispatcher
 
 
-def get_argparser():
+def get_argparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Uses the OpenSeaClient to connect to the OpenSea WebSocket stream "
@@ -20,7 +20,7 @@ def get_argparser():
         "--log-level",
         "-l",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        default="WARNING",
+        default="INFO",
     )
     parser.add_argument(
         "--output-file",
