@@ -121,7 +121,7 @@ services:
 
   # === Apache Cassandra ===
   cassandra:
-    image: docker.io/bitnami/cassandra:4.1
+    image: bitnami/cassandra:4.1.5
     ports:
       # - '7000:7000' # Internode communication
       - '9042:9042'
@@ -139,16 +139,33 @@ services:
         [
           "CMD",
           "cqlsh",
+          "cassandra",
           "-u",
           "cassandra",
           "-p",
           "cassandra",
-          "-e",
-          "describe cluster"
+          "-e describe keyspaces"
         ]
-      interval: 5s
+      start_period: 12s
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 12
+
+  cassandra-init:
+    image: bitnami/cassandra:4.1.5
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    profiles:
+      - cassandra
+      - all
+    environment:
+      - CASSANDRA_SEEDS=cassandra
+      - CASSANDRA_PASSWORD_SEEDER=yes
+      - CASSANDRA_PASSWORD=cassandra
+    volumes:
+      - ./docker/cassandra/entrypoint.cql:/entrypoint.cql
+    command: /bin/bash -c "echo initalizing cassandra && cqlsh cassandra -u cassandra -p cassandra -f /entrypoint.cql"
 
   # === Apache Kafka ===
   zookeeper:
@@ -170,7 +187,7 @@ services:
     profiles:
       - kafka
       - all
-    ports:
+      # ports:
       # - "9092:9092"
       # - "19092:19092"
       # - "29092:29092"
@@ -232,7 +249,9 @@ services:
       - kafka-schema-registry
 
   kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.3.2
+    build:
+      context: ./docker/kafka-connect
+      dockerfile: Dockerfile
     hostname: kafka-connect
     container_name: kafka-connect
     profiles:
@@ -259,7 +278,7 @@ services:
       CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
       CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
-      CONNECT_PLUGIN_PATH: '/usr/share/java,/etc/kafka-connect/jars,/usr/share/confluent-hub-components'
+      CONNECT_PLUGIN_PATH: '/usr/share/java,/etc/kafka-connect/jars,/usr/share/confluent-hub-components,/home/appuser/datastax-connector/kafka-connect-cassandra.jar'
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio123
       AWS_ENDPOINT_URL: http://minio:9000
@@ -267,9 +286,9 @@ services:
       - ./docker/monitoring/jmx-exporter:/usr/share/jmx-exporter
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083" ]
-      interval: 5s
-      timeout: 5s
-      start_period: 5s
+      start_period: 2s
+      interval: 1s
+      timeout: 3s
     depends_on:
       - zookeeper
       - kafka
@@ -283,6 +302,7 @@ services:
         confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.4.0
         confluent-hub install --no-prompt confluentinc/kafka-connect-s3:latest
         confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:latest
+        confluent-hub install --no-prompt confluentinc/kafka-connect-casandra:latest
         /etc/confluent/docker/run
 
   create-kafka-s3-connector:
@@ -293,6 +313,8 @@ services:
     depends_on:
       kafka-connect:
         condition: service_healthy
+      minio:
+        condition: service_started
     volumes:
       - ./docker/kafka-connect/connectors/minio-s3-sink.json:/etc/kafka-connect/minio-s3-sink.json
     # Keep open
@@ -304,6 +326,44 @@ services:
         "/bin/sh",
         "-c",
         "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/minio-s3-sink.json kafka-connect:8083/connectors"
+      ]
+
+  create-kafka-cassandra-global-metrics-connector:
+    image: confluentinc/cp-kafka-connect:7.3.2
+    profiles:
+      - cassandra
+      - all
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./docker/kafka-connect/connectors/:/etc/kafka-connect/connectors/
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/connectors/cassandra-global-metrics-sink.json kafka-connect:8083/connectors"
+      ]
+
+  create-kafka-cassandra-collection-metrics-connector:
+    image: confluentinc/cp-kafka-connect:7.3.2
+    profiles:
+      - casandra
+      - all
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./docker/kafka-connect/connectors/:/etc/kafka-connect/connectors/
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/connectors/cassandra-collection-metrics-sink.json kafka-connect:8083/connectors"
       ]
 
   ksqldb-server:
@@ -334,7 +394,7 @@ services:
     command:
       - "kafka-topics --create --topic OpenSeaRawEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
 
-  create-kafka-topic-enriched-events:
+  create-kafka-topic-enriched-events-global:
     image: confluentinc/cp-kafka:7.3.2
     depends_on:
       - kafka
@@ -343,7 +403,18 @@ services:
       - all
     entrypoint: [ "/bin/sh", "-c" ]
     command:
-      - "kafka-topics --create --topic OpenSeaEnrichedEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
+      - "kafka-topics --create --topic OpenSeaEnrichedGlobalEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
+
+  create-kafka-topic-enriched-events-collections:
+    image: confluentinc/cp-kafka:7.3.2
+    depends_on:
+      - kafka
+    profiles:
+      - kafka
+      - all
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - "kafka-topics --create --topic OpenSeaEnrichedCollectionsEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
 
   # === Conduktor (For Kafka) ===
   conduktor-db:

@@ -5,12 +5,12 @@ from typing import Any, Optional
 
 from confluent_kafka import Producer
 
-from opensea_client.processors.base import MessageProcessor
+from opensea_client.dispatchers.base import MessageDispatcher
 
 
-class KafkaProcessor(MessageProcessor):
+class KafkaTopicDispatcher(MessageDispatcher):
     """
-    Message processor that sends messages to a Kafka topic.
+    Message dispatcher that sends messages to a Kafka topic.
 
     @param topic_name:
         The Kafka topic to send messages to.

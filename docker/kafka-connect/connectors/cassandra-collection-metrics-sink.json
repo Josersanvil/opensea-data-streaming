@@ -1,0 +1,18 @@
+{
+    "name": "opensea-enriched-collection-events-cassandra-sink",
+    "config": {
+        "topics": "OpenSeaEnrichedCollectionsEvents",
+        "auth.password": "cassandra",
+        "tasks.max": "1",
+        "topic.OpenSeaEnrichedCollectionsEvents.opensea.collections_metrics.mapping": "metric=value.metric, timestamp=value.timestamp, collection=value.collection, value=value.value, asset_name=value.asset_name, asset_url=value.asset_url, image_url=value.image_url",
+        "connector.class": "com.datastax.oss.kafka.sink.CassandraSinkConnector",
+        "auth.provider": "PLAIN",
+        "port": "9042",
+        "auth.username": "cassandra",
+        "loadBalancing.localDc": "datacenter1",
+        "contactPoints": "cassandra",
+        "cassandra.contact.points": "cassandra",
+        "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "value.converter.schemas.enable": "false"
+    }
+}

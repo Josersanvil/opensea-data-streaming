@@ -2,12 +2,12 @@ import json
 import os
 from typing import Any, Optional, TextIO
 
-from opensea_client.processors.base import MessageProcessor
+from opensea_client.dispatchers.base import MessageDispatcher
 
 
-class DataFilesProcessor(MessageProcessor):
+class DataFilesDispatcher(MessageDispatcher):
     """
-    Processor that writes messages to a file.
+    Distpatches the messages received to a file.
     """
 
     def __init__(self, data_file: Optional[str | TextIO] = None):

@@ -9,13 +9,14 @@ from typing import Any, Optional, TextIO, Union
 import dotenv
 from websockets.client import WebSocketClientProtocol, connect
 
-from opensea_client.processors.base import MessageProcessor
-from opensea_client.processors.data_files import DataFilesProcessor
+from opensea_client.dispatchers.base import MessageDispatcher
+from opensea_client.dispatchers.data_files import DataFilesDispatcher
 
 
 class OpenSeaClient:
     """
-    A simple WebSocket client implementation to retrieve events from the OpenSea Web Stream.
+    A simple WebSocket client implementation to retrieve events from the OpenSea Web Stream
+    and dispatch them to different processors in an asynchronous way.
 
     @param payload: The payload to send to the socket.
         See https://docs.opensea.io/reference/websockets for more information.
@@ -29,13 +30,13 @@ class OpenSeaClient:
         self, payload: dict[str, Any], data_file: Optional[Union[TextIO, str]] = None
     ):
         self._logger = self.init_logger()
-        self._message_processors = []
+        self._message_dispatchers = []
         self.payload = payload
         self.data_file: TextIO | None = data_file  # type: ignore
         if isinstance(data_file, str):
             self.data_file = open(data_file, "a")
         if self.data_file:
-            self.add_message_processor(DataFilesProcessor(self.data_file))
+            self.add_message_dispatcher(DataFilesDispatcher(self.data_file))
 
     @property
     def logger(self) -> logging.Logger:
@@ -56,19 +57,19 @@ class OpenSeaClient:
         return logging.getLogger(f"{__name__}.{cls.__name__}")
 
     @property
-    def message_processors(self) -> list[MessageProcessor]:
+    def message_dispatchers(self) -> list[MessageDispatcher]:
         """
         A list of functions that will be called with the message as the only argument.
         The functions will be called in different threads.
         """
-        return self._message_processors
+        return self._message_dispatchers
 
-    @message_processors.setter
-    def message_processors(self, message_processors: list[MessageProcessor]):
-        self._message_processors = message_processors
+    @message_dispatchers.setter
+    def message_dispatchers(self, message_processors: list[MessageDispatcher]):
+        self._message_dispatchers = message_processors
 
-    def add_message_processor(self, processor: MessageProcessor):
-        self._message_processors.append(processor)  # type: ignore
+    def add_message_dispatcher(self, processor: MessageDispatcher):
+        self._message_dispatchers.append(processor)  # type: ignore
 
     async def heartbeat(self, socket: WebSocketClientProtocol):
         while True:
@@ -90,14 +91,14 @@ class OpenSeaClient:
         if self.data_file:
             self.data_file.close()
 
-    async def process_messages(self, socket: WebSocketClientProtocol):
+    async def dispatch_messages(self, socket: WebSocketClientProtocol):
         async for message in socket:
             response = json.loads(message)
             self.logger.info(response)
-            # Process messages in different threads
-            for processor in self.message_processors:
+            # Dispatch messages in different threads
+            for dispatcher in self.message_dispatchers:
                 threading.Thread(
-                    target=processor.process_message, args=(response,)
+                    target=dispatcher.process_message, args=(response,)
                 ).start()
 
     def write_message_to_data_file(self, message: dict[str, Any]):
@@ -130,5 +131,5 @@ class OpenSeaClient:
                 )
 
             await socket.send(json.dumps(self.payload))
-            tasks = [self.heartbeat(socket), self.process_messages(socket)]
+            tasks = [self.heartbeat(socket), self.dispatch_messages(socket)]
             await asyncio.gather(*tasks)

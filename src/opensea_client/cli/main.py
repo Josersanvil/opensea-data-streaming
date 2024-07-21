@@ -6,7 +6,7 @@ from datetime import datetime
 from datetime import timezone as tz
 
 from opensea_client.client import OpenSeaClient
-from opensea_client.processors.kafka import KafkaProcessor
+from opensea_client.dispatchers.kafka import KafkaTopicDispatcher
 
 
 def get_argparser():
@@ -77,8 +77,8 @@ def main():
     client = OpenSeaClient(payload, data_file=fb)
     logging.getLogger("opensea_client").setLevel(args.log_level)
     if args.kafka_topic:
-        client.add_message_processor(
-            KafkaProcessor(
+        client.add_message_dispatcher(
+            KafkaTopicDispatcher(
                 topic_name=args.kafka_topic,
                 client_id=args.kafka_client_id,
                 bootstrap_servers=args.kafka_brokers,
