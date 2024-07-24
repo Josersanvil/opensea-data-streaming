@@ -17,8 +17,12 @@ class AppSettings:
         return getenv(f"{self.APP_PREFIX}_LOG_LEVEL", "WARNING")
 
     @property
+    def spark_log_level(self) -> str:
+        return getenv(f"{self.APP_PREFIX}_SPARK_LOG_LEVEL", getenv("SPARK_LOG_LEVEL", "WARN"))
+
+    @property
     def spark_master(self) -> Optional[str]:
-        return getenv(f"{self.APP_PREFIX}_SPARK_MASTER")
+        return getenv(f"{self.APP_PREFIX}_SPARK_MASTER", "local[*]")
 
     @property
     def spark_app_name(self) -> str:

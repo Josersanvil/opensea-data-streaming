@@ -8,7 +8,8 @@ import pyspark.sql.functions as F
 import opensea_monitoring.processors.collections_events as collections_processors
 import opensea_monitoring.processors.global_events as global_processors
 from opensea_monitoring.processors.preprocessing import get_clean_events
-from opensea_monitoring.utils.spark import get_spark_session
+from opensea_monitoring.utils.configs import settings
+from opensea_monitoring.utils.spark import get_spark_session, write_df_to_kafka_topic
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame, SparkSession
@@ -28,10 +29,9 @@ batch_options = {
     "7 days",
     "1 day",
     "12 hours",
+    "1 hour",
 }
 stream_options = {
-    "1 hour",
-    "30 minutes",
     "5 minutes",
     "1 minute",
 }
@@ -70,7 +70,7 @@ def get_argparser() -> argparse.ArgumentParser:
         help="The Kafka topic to write the processed events.",
     )
     parser.add_argument(
-        "--raw-events-kakfa-topic",
+        "--raw-events-kafka-topic",
         type=str,
         help="The Kafka topic to read the raw events from.",
     )
@@ -99,7 +99,7 @@ def get_argparser() -> argparse.ArgumentParser:
         "-l",
         type=str,
         help="The log level for the application.",
-        default="INFO",
+        default=settings.log_level or "WARNING",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     )
     return parser
@@ -177,10 +177,8 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
             raise ValueError(
                 "Kafka brokers are required when writing to a Kafka topic."
             )
-        # Export the metrics to Kafka:
-        global_events.write.format("kafka").option(
-            "kafka.bootstrap.servers", args.kafka_brokers
-        ).option("topic", args.kafka_topic).save()
+            # Export the metrics to Kafka:
+        write_df_to_kafka_topic(global_events, args.kafka_topic, args.kafka_brokers)
 
 
 def process_global_metrics_stream(args: argparse.Namespace) -> None:
@@ -245,9 +243,9 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
                 "Kafka brokers are required when writing to a Kafka topic."
             )
         # Export the metrics to Kafka:
-        collections_events.write.format("kafka").option(
-            "kafka.bootstrap.servers", args.kafka_brokers
-        ).option("topic", args.kafka_topic).save()
+        write_df_to_kafka_topic(
+            collections_events, args.kafka_topic, args.kafka_brokers
+        )
 
 
 def process_collections_metrics_stream(args: argparse.Namespace) -> None:

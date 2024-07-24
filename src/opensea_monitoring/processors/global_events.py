@@ -42,13 +42,13 @@ def get_transactions_events(
         .select(
             F.col("window.start").alias("window_start"),
             F.col("window.end").alias("window_end"),
-            "transfers_count",
-            "items_transferred_count",
+            "total_transfers",
+            "total_items_transferred",
         )
     )
     windowed_transactions_events = windowed_transactions.unpivot(
         ["window_start", "window_end"],
-        ["transfers_count", "items_transferred_count"],
+        ["total_transfers", "total_items_transferred"],
         "metric",
         "value",
     ).select(
@@ -82,8 +82,8 @@ def get_sales_volume_events(
         sales_items.groupBy(time_window)
         .agg(
             F.count("*").alias("total_sales"),
-            F.sum("payload.payment_token.eth_price").alias("total_eth_volume"),
-            F.sum("payload.payment_token.usd_price").alias("total_usd_volume"),
+            F.sum("eth_price").alias("total_eth_volume"),
+            F.sum("usd_price").alias("total_usd_volume"),
         )
         .select(
             F.col("window.start").alias("window_start"),

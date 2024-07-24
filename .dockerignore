@@ -6,4 +6,5 @@ connectors/**/*
 .vscode/**/*
 build
 build/**/*
-
+workdir
+workdir/**/*

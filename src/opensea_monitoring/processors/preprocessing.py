@@ -34,12 +34,16 @@ def get_clean_events(raw_events: "DataFrame") -> "DataFrame":
         F.col("payload.payload.from_account.address").alias("from_account"),
         F.col("payload.payload.to_account.address").alias("to_account"),
         F.col("payload.payload.payment_token.symbol").alias("payment_symbol"),
-        F.col("payload.payload.payment_token.eth_price")
-        .cast(T.DoubleType())
-        .alias("eth_price"),
-        F.col("payload.payload.payment_token.usd_price")
-        .cast(T.DoubleType())
-        .alias("usd_price"),
+        (
+            F.col("payload.payload.payment_token.eth_price")
+            .cast(T.DoubleType())
+            .alias("eth_price")
+        ),
+        (
+            F.col("payload.payload.payment_token.usd_price")
+            .cast(T.DoubleType())
+            .alias("usd_price")
+        ),
         F.col("payload.payload.quantity").cast(T.IntegerType()).alias("quantity"),
     ).filter(F.col("event") != "phx_reply")
     return df_events
