@@ -38,7 +38,6 @@ def get_transactions_events(
             F.count("*").alias("total_transfers"),
             F.sum("quantity").alias("total_items_transferred"),
         )
-        .orderBy("window")
         .select(
             F.col("window.start").alias("window_start"),
             F.col("window.end").alias("window_end"),

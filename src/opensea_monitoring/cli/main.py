@@ -4,18 +4,20 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 import pyspark.sql.functions as F
+from py4j.protocol import Py4JError
 
 import opensea_monitoring.processors.collections_events as collections_processors
 import opensea_monitoring.processors.global_events as global_processors
 from opensea_monitoring.processors.preprocessing import get_clean_events
 from opensea_monitoring.utils.configs import settings
 from opensea_monitoring.utils.spark import get_spark_session, write_df_to_kafka_topic
+from opensea_monitoring.utils.timestamp import parse_timestamp
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame, SparkSession
 
-global_events_cols = ["metric", "timestamp", "value", "collection"]
-collections_events_cols = [
+GLOBAL_EVENTS_COLS = ["metric", "timestamp", "value", "collection"]
+COLLECTIONS_EVENTS_COLS = [
     "metric",
     "timestamp",
     "collection",
@@ -24,14 +26,14 @@ collections_events_cols = [
     "asset_url",
     "image_url",
 ]
-batch_options = {
+BATCH_OPTIONS = {
     "14 days",
     "7 days",
     "1 day",
     "12 hours",
     "1 hour",
 }
-stream_options = {
+STREAM_OPTIONS = {
     "5 minutes",
     "1 minute",
 }
@@ -57,22 +59,17 @@ def get_argparser() -> argparse.ArgumentParser:
         "time_window",
         type=str,
         help="The time window in which to group the events.",
-        choices=batch_options.union(stream_options),
+        choices=BATCH_OPTIONS.union(STREAM_OPTIONS),
     )
     parser.add_argument(
-        "--raw-events-s3-uri",
+        "--slide-duration",
         type=str,
-        help="The S3 URI where the raw events are stored.",
+        help="The slide duration for the time window.",
     )
     parser.add_argument(
         "--kafka-topic",
         type=str,
-        help="The Kafka topic to write the processed events.",
-    )
-    parser.add_argument(
-        "--raw-events-kafka-topic",
-        type=str,
-        help="The Kafka topic to read the raw events from.",
+        help="The Kafka topic to write the processed events to.",
     )
     parser.add_argument(
         "--kafka-brokers",
@@ -80,9 +77,49 @@ def get_argparser() -> argparse.ArgumentParser:
         help="The Kafka brokers to connect to.",
     )
     parser.add_argument(
-        "--slide-duration",
+        "--debug",
+        dest="debug_mode",
+        action="store_true",
+        help=(
+            "Enable debug mode. The behavior depends on if the application "
+            "is running in batch or stream mode."
+        ),
+    )
+    parser.add_argument(
+        "--log-level",
+        "-l",
         type=str,
-        help="The slide duration for the time window.",
+        help="The log level for the application.",
+        default=settings.log_level or "WARNING",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    )
+    # Batch arguments
+    parser.add_argument(
+        "--raw-events-s3-uri",
+        type=str,
+        help="The S3 URI where the raw events are stored.",
+    )
+    parser.add_argument(
+        "--timestamp-start",
+        type=parse_timestamp,
+        help=(
+            "The start timestamp for batch processing. "
+            "Events sent before this timestamp will be ignored."
+        ),
+    )
+    parser.add_argument(
+        "--timestamp-end",
+        type=parse_timestamp,
+        help=(
+            "The end timestamp for batch processing. "
+            "Events sent after this timestamp will be ignored."
+        ),
+    )
+    # Stream arguments
+    parser.add_argument(
+        "--raw-events-kafka-topic",
+        type=str,
+        help="The Kafka topic to read the raw events from.",
     )
     parser.add_argument(
         "--watermark-duration",
@@ -93,14 +130,6 @@ def get_argparser() -> argparse.ArgumentParser:
         "--checkpoint-dir",
         type=str,
         help="The checkpoint directory for the streaming query.",
-    )
-    parser.add_argument(
-        "--log-level",
-        "-l",
-        type=str,
-        help="The log level for the application.",
-        default=settings.log_level or "WARNING",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     )
     return parser
 
@@ -123,7 +152,7 @@ def _get_raw_events_stream(
     spark: "SparkSession", args: argparse.Namespace
 ) -> "DataFrame":
     if not (
-        args.raw_events_kakfa_topic
+        args.raw_events_kafka_topic
         and args.kafka_brokers
         and args.kafka_topic
         and args.checkpoint_dir
@@ -133,11 +162,11 @@ def _get_raw_events_stream(
             "directory are required when processing data in stream"
         )
     logger = get_logger("get_raw_events_stream")
-    logger.debug(f"Reading raw events from Kafka topic '{args.raw_events_kakfa_topic}'")
+    logger.debug(f"Reading raw events from Kafka topic '{args.raw_events_kafka_topic}'")
     raw_events = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", args.kafka_brokers)
-        .option("subscribe", args.raw_events_kakfa_topic)
+        .option("subscribe", args.raw_events_kafka_topic)
         .load()
     ).select(
         F.get_json_object(F.col("value").cast("string"), "$.event").alias("event"),
@@ -152,6 +181,14 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
     spark = get_spark_session(logger.name)
     raw_events = _get_raw_events_batch(spark, args)
     clean_events = get_clean_events(raw_events)
+    if args.timestamp_start:
+        clean_events = clean_events.filter(
+            F.col("sent_at") >= F.lit(args.timestamp_start)
+        )
+    if args.timestamp_end:
+        clean_events = clean_events.filter(
+            F.col("sent_at") <= F.lit(args.timestamp_end)
+        )
     clean_events.cache()
     # Global metrics:
     transactions_events = global_processors.get_transactions_events(
@@ -165,9 +202,9 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
     )
     # Concatenate the events:
     global_events = (
-        transactions_events[global_events_cols]
-        .union(marketplace_sales[global_events_cols])
-        .union(top_collections_sales[global_events_cols])
+        transactions_events[GLOBAL_EVENTS_COLS]
+        .union(marketplace_sales[GLOBAL_EVENTS_COLS])
+        .union(top_collections_sales[GLOBAL_EVENTS_COLS])
     )
     events_cnt = global_events.count()
     logger.info(f"Processed {events_cnt} events.")
@@ -185,7 +222,7 @@ def process_global_metrics_stream(args: argparse.Namespace) -> None:
     logger = get_logger("process_global_metrics_stream")
     spark = get_spark_session(logger.name)
     raw_events = _get_raw_events_stream(spark, args)
-    clean_events = get_clean_events(raw_events)
+    clean_events = get_clean_events(raw_events, is_json_payload=True)
     # Global events
     transactions_events = global_processors.get_transactions_events(
         clean_events, args.time_window, args.slide_duration, args.watermark_duration
@@ -193,16 +230,31 @@ def process_global_metrics_stream(args: argparse.Namespace) -> None:
     sold_items_events = global_processors.get_sales_volume_events(
         clean_events, args.time_window, args.slide_duration, args.watermark_duration
     )
-    global_events = transactions_events[global_events_cols].union(
-        sold_items_events[global_events_cols]
+    global_events = transactions_events[GLOBAL_EVENTS_COLS].union(
+        sold_items_events[GLOBAL_EVENTS_COLS]
     )
-    global_events_stream = (
-        global_events.select(F.to_json(F.struct("*")).alias("value"))
-        .writeStream.format("kafka")
-        .option("kafka.bootstrap.servers", args.kafka_brokers)
-        .option("topic", args.kafka_topic)
-        .option("checkpointLocation", args.checkpoint_dir)
-    )
+    if args.debug_mode:
+        logging.warning(
+            "Debug mode enabled. The results of the streaming query will "
+            "be written to the console instead of to a Kafka Topic"
+        )
+        global_events_stream = (
+            global_events.select(F.to_json(F.struct("*")).alias("value"))
+            .writeStream.format("console")
+            .outputMode("complete")
+            .option("truncate", "false")
+        )
+    else:
+        logger.debug(
+            f"Metrics from the streaming query will be written to Kafka topic '{args.kafka_topic}'"
+        )
+        global_events_stream = (
+            global_events.select(F.to_json(F.struct("*")).alias("value"))
+            .writeStream.format("kafka")
+            .option("kafka.bootstrap.servers", args.kafka_brokers)
+            .option("topic", args.kafka_topic)
+            .option("checkpointLocation", args.checkpoint_dir)
+        )
     # Start the structured streaming query:
     global_events_query = global_events_stream.start()
     logger.info(f"Started streaming query '{global_events_query.id}'")
@@ -214,24 +266,32 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
     spark = get_spark_session(logger.name)
     raw_events = _get_raw_events_batch(spark, args)
     clean_events = get_clean_events(raw_events)
+    if args.timestamp_start:
+        clean_events = clean_events.filter(
+            F.col("sent_at") >= F.lit(args.timestamp_start)
+        )
+    if args.timestamp_end:
+        clean_events = clean_events.filter(
+            F.col("sent_at") <= F.lit(args.timestamp_end)
+        )
     collections_assets_events = (
         collections_processors.get_top_collections_assets_events(
-            clean_events, args.collection_name, args.time_window
+            clean_events, args.time_window
         )
     )
     collection_sales_events = collections_processors.get_collection_sales_events(
-        clean_events, args.collection_name, args.time_window
+        clean_events, args.time_window
     )
     collection_transactions_events = (
         collections_processors.get_collection_transactions_events(
-            clean_events, args.collection_name, args.time_window
+            clean_events, args.time_window
         )
     )
     # Concatenate the events:
     collections_events = (
-        collections_assets_events[collections_events_cols]
-        .union(collection_sales_events[collections_events_cols])
-        .union(collection_transactions_events[collections_events_cols])
+        collections_assets_events[COLLECTIONS_EVENTS_COLS]
+        .union(collection_sales_events[COLLECTIONS_EVENTS_COLS])
+        .union(collection_transactions_events[COLLECTIONS_EVENTS_COLS])
     )
     events_cnt = collections_events.count()
     logger.info(f"Processed {events_cnt} events.")
@@ -252,10 +312,9 @@ def process_collections_metrics_stream(args: argparse.Namespace) -> None:
     logger = get_logger("process_collections_metrics_stream")
     spark = get_spark_session(logger.name)
     raw_events = _get_raw_events_stream(spark, args)
-    clean_events = get_clean_events(raw_events)
+    clean_events = get_clean_events(raw_events, is_json_payload=True)
     collection_sales_events = collections_processors.get_collection_sales_events(
         clean_events,
-        args.collection_name,
         args.time_window,
         args.slide_duration,
         args.watermark_duration,
@@ -263,15 +322,14 @@ def process_collections_metrics_stream(args: argparse.Namespace) -> None:
     collection_transactions_events = (
         collections_processors.get_collection_transactions_events(
             clean_events,
-            args.collection_name,
             args.time_window,
             args.slide_duration,
             args.watermark_duration,
         )
     )
     # Concatenate the events:
-    collections_events = collection_sales_events[collections_events_cols].union(
-        collection_transactions_events[collections_events_cols]
+    collections_events = collection_sales_events[COLLECTIONS_EVENTS_COLS].union(
+        collection_transactions_events[COLLECTIONS_EVENTS_COLS]
     )
     collections_events_stream = (
         collections_events.select(F.to_json(F.struct("*")).alias("value"))
@@ -294,21 +352,27 @@ def main() -> None:
     logger.setLevel(args.log_level)
     time_start = time.time()
     if args.type == "global":
-        if args.time_window in batch_options:
+        if args.time_window in BATCH_OPTIONS:
             logger.info("Processing global metrics in batch mode.")
             process_global_metrics_batch(args)
-        elif args.time_window in stream_options:
+        elif args.time_window in STREAM_OPTIONS:
             logger.info("Processing global metrics in stream mode.")
-            process_global_metrics_stream(args)
+            try:
+                process_global_metrics_stream(args)
+            except Py4JError:
+                logger.exception("The stream was terminated, check the logs for more info.")
         else:
             raise ValueError("Invalid time window for global metrics.")
     elif args.type == "collections":
-        if args.time_window in batch_options:
+        if args.time_window in BATCH_OPTIONS:
             logger.info("Processing collections metrics in batch mode.")
             process_collections_metrics_batch(args)
-        elif args.time_window in stream_options:
+        elif args.time_window in STREAM_OPTIONS:
             logger.info("Processing collections metrics in stream mode.")
-            process_collections_metrics_stream(args)
+            try:
+                process_collections_metrics_stream(args)
+            except Py4JError:
+                logger.exception("The stream was terminated, check the logs for more info.")
         else:
             raise ValueError("Invalid time window for collections metrics.")
     else:

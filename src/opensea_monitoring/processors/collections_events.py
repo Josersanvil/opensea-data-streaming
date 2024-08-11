@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 
 def get_top_collections_assets_events(
     clean_events: "DataFrame",
-    collection_name: str | list[str],
     window_duration: str,
     slide_duration: Optional[str] = None,
 ) -> "DataFrame":
@@ -28,15 +27,11 @@ def get_top_collections_assets_events(
     sold_items = get_sales_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
     time_window = F.window("sent_at", window_duration, slide_duration)
-    if isinstance(collection_name, str):
-        collection_name = [collection_name]
-    collections_sold_items = sold_items.filter(
-        F.col("collection_slug").isin(collection_name)
-    )
-    collections_assets_ranked = collections_sold_items.select(
+    collections_assets_ranked = sold_items.select(
         "collection_slug",
         "item_blockchain",
         "item_nft_id",
+        "item_url",
         "item_name",
         "image_url",
         "usd_price",
@@ -64,7 +59,6 @@ def get_top_collections_assets_events(
 
 def get_collection_transactions_events(
     clean_events: "DataFrame",
-    collection_name: str | list[str],
     window_duration: str,
     slide_duration: Optional[str] = None,
     watermark_duration: Optional[str] = None,
@@ -79,17 +73,12 @@ def get_collection_transactions_events(
     transaction_events = get_transferred_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
     time_window = F.window("sent_at", window_duration, slide_duration)
-    if isinstance(collection_name, str):
-        collection_name = [collection_name]
     if watermark_duration:
         transaction_events = transaction_events.withWatermark(
             "sent_at", watermark_duration
         )
-    selected_collections_transactions = transaction_events.filter(
-        F.col("collection_slug").isin(collection_name)
-    )
     collections_transactions = (
-        selected_collections_transactions.groupBy("collection_slug", time_window).agg(
+        transaction_events.groupBy("collection_slug", time_window).agg(
             F.count("*").alias("total_transfers"),
             F.sum("quantity").alias("total_items_transferred"),
         )
@@ -124,7 +113,6 @@ def get_collection_transactions_events(
 
 def get_collection_sales_events(
     clean_events: "DataFrame",
-    collection_name: str | list[str],
     window_duration: str,
     slide_duration: Optional[str] = None,
     watermark_duration: Optional[str] = None,
@@ -139,15 +127,10 @@ def get_collection_sales_events(
     sold_items = get_sales_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
     time_window = F.window("sent_at", window_duration, slide_duration)
-    if isinstance(collection_name, str):
-        collection_name = [collection_name]
     if watermark_duration:
         sold_items = sold_items.withWatermark("sent_at", watermark_duration)
-    selected_collections_sold_items = sold_items.filter(
-        F.col("collection_slug").isin(collection_name)
-    )
     collections_sales = (
-        selected_collections_sold_items.groupBy("collection_slug", time_window)
+        sold_items.groupBy("collection_slug", time_window)
         .agg(
             F.sum("usd_price").alias("total_usd_volume"),
             F.count("*").alias("total_sales_count"),
