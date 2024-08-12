@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+authors = [{ "name" = "Jose R. Sanchez Viloria" }]
+name = "opensea-data-streaming"
+version = "1.0.0"
+readme = "file: README.md"
+classifiers = [
+    "Programming Language :: Python",
+    "License :: OSI Approved",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pyspark",
+    "websockets",
+    "python-dotenv",
+    "confluent-kafka",
+    "cassandra-driver",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "flake8", "black", "isort"]
+
+[project.scripts]
+opensea-client = "opensea_client.cli.main:main"
