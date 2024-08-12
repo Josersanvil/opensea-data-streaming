@@ -301,7 +301,7 @@ services:
       - ./docker/monitoring/jmx-exporter:/usr/share/jmx-exporter
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083" ]
-      start_period: 2s
+      start_period: 12s
       interval: 1s
       timeout: 3s
     depends_on:

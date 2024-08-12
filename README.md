@@ -120,7 +120,8 @@ docker compose --profile kafka exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://s
     --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
     --raw-events-kafka-topic OpenSeaRawEvents \
     --kafka-brokers kafka:19092 \
-    --kafka-topic OpenSeaEnrichedGlobalEvents
+    --kafka-topic OpenSeaEnrichedGlobalEvents \
+    -l INFO
 ```
 
 #### Process collection events in Batch mode
@@ -131,7 +132,8 @@ docker compose --profile kafka exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://s
     --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
     --raw-events-kafka-topic OpenSeaRawEvents \
     --kafka-brokers kafka:19092 \
-    --kafka-topic OpenSeaEnrichedGlobalEvents
+    --kafka-topic OpenSeaEnrichedGlobalEvents \
+    -l INFO
 ```
 
 When processing events in Batch mode, you can also filter the events by a timestamp range. eg:
@@ -144,12 +146,13 @@ docker compose --profile kafka exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://s
     --kafka-brokers kafka:19092 \
     --kafka-topic OpenSeaEnrichedGlobalEvents \
     --timestamp-start '2024-07-28' \
-    --timestamp-end '2024-07-28T12:00:00'
+    --timestamp-end '2024-07-28T12:00:00' \
+    -l INFO
 ```
 
 #### Process global events in Stream mode
 
-This command will process the global events in stream mode. It will read the raw events retrieved from the OpenSea API from the "Raw Events" Kafka Topic and write the enriched events to the Kafka topic `OpenSeaEnrichedGlobalEvents`. The data will be aggregated in 1 minute windows.
+This command will process the global events in stream mode. It will read a continuous stream of the raw events retrieved from the OpenSea API from the "Raw Events" Kafka Topic and write the enriched events to the Kafka topic `OpenSeaEnrichedGlobalEvents`. The data will be aggregated in 1 minute windows.
 
 ```bash
 docker compose --profile kafka exec -it \
@@ -163,7 +166,8 @@ docker compose --profile kafka exec -it \
     --kafka-topic OpenSeaEnrichedGlobalEvents \
     --slide-duration '1 minute' \
     --watermark-duration '1 minute' \
-    --checkpoint-dir s3a://processed-data/checkpoints/topics/OpenSeaEnrichedEvents/
+    --checkpoint-dir s3a://processed-data/checkpoints/topics/OpenSeaEnrichedEvents/ \
+    -l INFO
 ```
 
 #### Process collection events in Stream mode
@@ -185,7 +189,7 @@ docker compose --profile kafka exec -it \
 
 #### Debug mode for streams
 
-Use the `--debug` option to enable debug mode for the stream processing. This will print additional information about the processing steps to the console.
+Use the `--debug` option to enable debug mode for the stream processing. This will write the results of the stream processing to the console instead of writing them to the Kafka topic.
 
 ```bash
 docker compose --profile kafka exec -it \

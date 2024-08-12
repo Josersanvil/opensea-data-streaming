@@ -10,7 +10,11 @@ import opensea_monitoring.processors.collections_events as collections_processor
 import opensea_monitoring.processors.global_events as global_processors
 from opensea_monitoring.processors.preprocessing import get_clean_events
 from opensea_monitoring.utils.configs import settings
-from opensea_monitoring.utils.spark import get_spark_session, write_df_to_kafka_topic
+from opensea_monitoring.utils.kafka import (
+    get_kafka_stream_writer,
+    write_df_to_kafka_topic,
+)
+from opensea_monitoring.utils.spark import get_spark_session
 from opensea_monitoring.utils.timestamp import parse_timestamp
 
 if TYPE_CHECKING:
@@ -233,28 +237,14 @@ def process_global_metrics_stream(args: argparse.Namespace) -> None:
     global_events = transactions_events[GLOBAL_EVENTS_COLS].union(
         sold_items_events[GLOBAL_EVENTS_COLS]
     )
-    if args.debug_mode:
-        logging.warning(
-            "Debug mode enabled. The results of the streaming query will "
-            "be written to the console instead of to a Kafka Topic"
-        )
-        global_events_stream = (
-            global_events.select(F.to_json(F.struct("*")).alias("value"))
-            .writeStream.format("console")
-            .outputMode("complete")
-            .option("truncate", "false")
-        )
-    else:
-        logger.debug(
-            f"Metrics from the streaming query will be written to Kafka topic '{args.kafka_topic}'"
-        )
-        global_events_stream = (
-            global_events.select(F.to_json(F.struct("*")).alias("value"))
-            .writeStream.format("kafka")
-            .option("kafka.bootstrap.servers", args.kafka_brokers)
-            .option("topic", args.kafka_topic)
-            .option("checkpointLocation", args.checkpoint_dir)
-        )
+    global_events_stream = get_kafka_stream_writer(
+        global_events,
+        args.kafka_topic,
+        args.kafka_brokers,
+        args.checkpoint_dir,
+        debug=args.debug_mode,
+        logger=logger,
+    )
     # Start the structured streaming query:
     global_events_query = global_events_stream.start()
     logger.info(f"Started streaming query '{global_events_query.id}'")
@@ -331,12 +321,13 @@ def process_collections_metrics_stream(args: argparse.Namespace) -> None:
     collections_events = collection_sales_events[COLLECTIONS_EVENTS_COLS].union(
         collection_transactions_events[COLLECTIONS_EVENTS_COLS]
     )
-    collections_events_stream = (
-        collections_events.select(F.to_json(F.struct("*")).alias("value"))
-        .writeStream.format("kafka")
-        .option("kafka.bootstrap.servers", args.kafka_brokers)
-        .option("topic", args.kafka_topic)
-        .option("checkpointLocation", args.checkpoint_dir)
+    collections_events_stream = get_kafka_stream_writer(
+        collections_events,
+        args.kafka_topic,
+        args.kafka_brokers,
+        args.checkpoint_dir,
+        debug=args.debug_mode,
+        logger=logger,
     )
     collections_events_query = collections_events_stream.start()
     # Start the structured streaming query:
@@ -360,7 +351,9 @@ def main() -> None:
             try:
                 process_global_metrics_stream(args)
             except Py4JError:
-                logger.exception("The stream was terminated, check the logs for more info.")
+                logger.exception(
+                    "The stream was terminated, check the logs for more info."
+                )
         else:
             raise ValueError("Invalid time window for global metrics.")
     elif args.type == "collections":
@@ -372,7 +365,9 @@ def main() -> None:
             try:
                 process_collections_metrics_stream(args)
             except Py4JError:
-                logger.exception("The stream was terminated, check the logs for more info.")
+                logger.exception(
+                    "The stream was terminated, check the logs for more info."
+                )
         else:
             raise ValueError("Invalid time window for collections metrics.")
     else:
