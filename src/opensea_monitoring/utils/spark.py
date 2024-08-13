@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from pyspark.conf import SparkConf
 from pyspark.sql import SparkSession

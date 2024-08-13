@@ -1,20 +1,4 @@
 # Docker compose file for local PySpark 
-x-process-data: &process-data
-  build:
-    context: .
-    dockerfile: ./docker/spark/Dockerfile
-  environment:
-    - OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077
-    - OPENSEA_MONITORING_LOG_LEVEL=INFO
-    - OPENSEA_MONITORING_S3_BUCKET_RAW_DATA=raw-data
-    - OPENSEA_MONITORING_S3_BUCKET_PROCESSED_DATA=processed-data
-  profiles:
-    - kafka
-  depends_on:
-    - create-kafka-topic-enriched-events-global
-    - spark
-    - minio
-
 services:
   # === Streaming application
   stream:

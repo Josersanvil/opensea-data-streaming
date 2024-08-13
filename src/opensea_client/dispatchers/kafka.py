@@ -45,7 +45,7 @@ class KafkaTopicDispatcher(MessageDispatcher):
         value = os.environ.get("OPENSEA_CLIENT_KAFKA_TOPIC", self._topic_name)
         if not value:
             raise ValueError(
-                "topic_name is not set. Please provide a value for the topic_name parameter "
+                "topic_name is not set. Please provide a value for the topic_name param"
                 "or set the OPENSEA_CLIENT_KAFKA_TOPIC environment variable."
             )
         return value

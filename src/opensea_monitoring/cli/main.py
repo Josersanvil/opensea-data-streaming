@@ -128,7 +128,7 @@ def get_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--watermark-duration",
         type=str,
-        help="The watermark duration for the time window. Only required for streaming data.",
+        help="The watermark duration for the time window. Only required for streaming.",
     )
     parser.add_argument(
         "--checkpoint-dir",

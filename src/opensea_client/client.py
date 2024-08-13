@@ -15,12 +15,14 @@ from opensea_client.dispatchers.data_files import DataFilesDispatcher
 
 class OpenSeaClient:
     """
-    A simple WebSocket client implementation to retrieve events from the OpenSea Web Stream
-    and dispatch them to different processors in an asynchronous way.
+    A simple WebSocket client implementation to retrieve events
+    from the OpenSea Web Stream and dispatch them to different
+    processors in an asynchronous way.
 
     @param payload: The payload to send to the socket.
         See https://docs.opensea.io/reference/websockets for more information.
-    @param data_file: The file to write the messages to. If None, messages will not be written to a file.
+    @param data_file: The file to write the messages to.
+        If None, messages will not be written to a file.
     """
 
     opensea_main_socket = "wss://stream.openseabeta.com/socket/websocket"
@@ -85,7 +87,8 @@ class OpenSeaClient:
 
     async def handle_terminate(self, sig, socket: WebSocketClientProtocol):
         self.logger.warning(
-            f"Received {signal.Signals(sig).name}. Please wait while the connection is closed..."
+            f"Received {signal.Signals(sig).name}. "
+            "Please wait while the connection is closed..."
         )
         await socket.close()
         if self.data_file:

@@ -27,7 +27,10 @@ def get_argparser() -> argparse.ArgumentParser:
         "-o",
         type=argparse.FileType("a"),
         default=None,
-        help="The file to write the messages to. Use '-' to write to stdout. If not specified, one will be created in the outdir (if specified).",
+        help=(
+            "The file to write the messages to. Use '-' to write to stdout. "
+            "If not specified, one will be created in the outdir (if specified).",
+        ),
     )
     parser.add_argument(
         "--kafka-topic",
@@ -36,7 +39,10 @@ def get_argparser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--kafka-brokers",
-        help="The Kafka brokers to connect to. Multiple brokers should be separated by commas.",
+        help=(
+            "The Kafka brokers to connect to. "
+            "Multiple brokers should be separated by commas."
+        ),
         metavar="host1:port1,host2:port2,...",
     )
 

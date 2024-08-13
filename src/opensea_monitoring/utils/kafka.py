@@ -25,9 +25,11 @@ def get_kafka_stream_writer(
     @param topic: The Kafka topic to write to.
     @param kafka_brokers: The Kafka brokers to connect to.
     @param checkpoint_location: The location to store the checkpoint data.
-    @param debug: If True, the results will be written to the console instead of to a Kafka Topic.
+    @param debug: If True, the results will be written to the console
+        instead of to a Kafka Topic.
     @param key_column: The column to use as the key. If None, no key will be used.
-        The value column is a column with the JSON representation of the rest of the columns.
+        The value column is a column with the JSON representation
+        of the rest of the columns.
     @param logger: The logger to use. If None, a new logger will be created.
     @return: The DataStreamWriter object.
     """
@@ -79,7 +81,8 @@ def write_df_to_kafka_topic(
     @param topic: The Kafka topic to write to.
     @param kafka_brokers: The Kafka brokers to connect to.
     @param key_column: The column to use as the key. If None, no key will be used.
-        The value column is a column with the JSON representation of the rest of the columns.
+        The value column is a column with the JSON representation
+        of the rest of the columns.
     """
     key_col = F.col(key_column) if key_column else F.lit(None)
     df_cols = [col for col in df.columns if col != key_column]
