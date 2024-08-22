@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     profiles:
-      - kafka
+      - all
     command:
       - --kafka-topic=OpenSeaRawEvents
       - --kafka-broker=kafka:19092
@@ -25,6 +25,7 @@ services:
     volumes:
       - ./workdir:/workdir
       - ./spark-conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      - ./src:/app/src
     working_dir: /workdir
     user: root
     command:
@@ -41,6 +42,11 @@ services:
       - AWS_ACCESS_KEY_ID=minio
       - AWS_SECRET_ACCESS_KEY=minio123
       - AWS_ENDPOINT_URL=http://minio:9000
+      - OPENSEA_MONITORING_CASSANDRA_USERNAME=cassandra
+      - OPENSEA_MONITORING_CASSANDRA_PASSWORD=cassandra
+      - OPENSEA_MONITORING_CASSANDRA_HOST=cassandra
+      - OPENSEA_MONITORING_CASSANDRA_PORT=9042
+      - OPENSEA_MONITORING_CASSANDRA_DEFAULT_KEYSPACE=opensea
     ports:
       - "8888:8888"
       - "4040:4040"
@@ -50,6 +56,9 @@ services:
     build:
       context: .
       dockerfile: ./docker/spark/Dockerfile
+    profiles:
+      - spark
+      - all
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -76,6 +85,9 @@ services:
 
   spark-worker:
     image: docker.io/bitnami/spark:3.5
+    profiles:
+      - spark
+      - all
     depends_on:
       - spark
     deploy:
@@ -330,7 +342,6 @@ services:
   create-kafka-cassandra-global-metrics-connector:
     image: confluentinc/cp-kafka-connect:7.3.2
     profiles:
-      - cassandra
       - all
     depends_on:
       kafka-connect:
@@ -349,7 +360,6 @@ services:
   create-kafka-cassandra-collection-metrics-connector:
     image: confluentinc/cp-kafka-connect:7.3.2
     profiles:
-      - casandra
       - all
     depends_on:
       kafka-connect:
@@ -430,7 +440,7 @@ services:
       - conduktor_db_data:/var/lib/postgresql/data
 
   conduktor:
-    image: conduktor/conduktor-platform:1.19.1
+    image: conduktor/conduktor-console:1.24.1
     ports:
       - "8090:8080"
     volumes:
@@ -450,44 +460,27 @@ services:
       CDK_CLUSTERS_0_SCHEMAREGISTRY_URL: "http://kafka-schema-registry:8081"
       CDK_CLUSTERS_0_KAFKACONNECTS_0_URL: "http://kafka-connect:8083"
       CDK_CLUSTERS_0_KAFKACONNECTS_0_NAME: "full stack kafka connect"
+      CDK_MONITORING_CORTEX-URL: http://conduktor-monitoring:9009/
+      CDK_MONITORING_ALERT-MANAGER-URL: http://conduktor-monitoring:9010/
+      CDK_MONITORING_CALLBACK-URL: http://conduktor-console:8080/monitoring/api/
+      CDK_MONITORING_NOTIFICATIONS-CALLBACK-URL: http://localhost:8080
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio123
     depends_on:
       - conduktor-db
 
-  # === Prometheus and Grafana ===
-  prometheus:
-    image: prom/prometheus:v2.47.2
-    ports:
-      - "9090:9090"
+  conduktor-monitoring:
+    image: conduktor/conduktor-console-cortex:1.24.1
+    depends_on:
+      - conduktor
     profiles:
-      - monitoring
+      - kafka
       - all
-    volumes:
-      - ./docker/monitoring/prometheus:/etc/prometheus
-
-  alertmanager:
-    image: prom/alertmanager:v0.26.0
-    profiles:
-      - monitoring
-      - all
-    ports:
-      - "19093:9093"
-
-  grafana:
-    image: grafana/grafana:9.5.19
-    profiles:
-      - monitoring
-      - all
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./docker/monitoring/grafana/:/etc/grafana/provisioning/
+    environment:
+      CDK_CONSOLE-URL: "http://conduktor:8080"
 
 volumes:
   cassandra_data:
   minio_data:
   conduktor_db_data:
   conduktor_data:
-  grafana-data:
