@@ -4,7 +4,44 @@ A scalable Python app that analyses NFT data from OpenSea in real time using ope
 
 See: [OpenSea Stream API Overview](https://docs.opensea.io/reference/stream-api-overview)
 
+## Metrics
+
+These are the metrics that are calculated by the application for the data retrieved from the OpenSea API.
+
+### Global Metrics
+
+These are metrics that are calculated for the entire dataset of events retrieved from the OpenSea API in a given time window.
+
+- Total number of transfers
+- Total number of transferred items
+- Total number of sales
+- Total volume of sales in USD and ETH
+- Top collections by volume of sales
+
+### Collection Metrics
+
+These are metrics that are calculated for each collection of items retrieved from the OpenSea API in a given time window.
+
+- Total number of transfers
+- Total number of transferred items
+- Total number of sales
+- Total volume of sales in USD and ETH
+- Number of assets sold
+- Floor price of the collection (lowest price of an asset sold)
+- Average price of the assets sold
+- Top assets by volume of sales
+
 ## Setup
+
+You must copy the file `.env.example` to `.env` and set the environment variables to the desired values.
+
+These variables are used to configure the application and the services that it uses.
+
+### Environment Variables
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| OPENSEA_API_KEY | API key for the OpenSea API | - |
 
 ### Docker Compose
 
@@ -115,7 +152,7 @@ docker compose --profile kafka exec -it spark python -m opensea_monitoring.cli -
 This command will process the global events in batch mode. It will read the raw events retrieved from the OpenSea API in an S3 bucket and write the enriched events to the Kafka topic `OpenSeaEnrichedGlobalEvents`. The data will be aggregated in 1 hour windows.
 
 ```sh
-docker compose --profile kafka exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
+docker compose --profile all exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
     python -m opensea_monitoring.cli global '1 hour' \
     --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
     --raw-events-kafka-topic OpenSeaRawEvents \

@@ -12,16 +12,20 @@ classifiers = [
     "License :: OSI Approved",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "pyspark",
-    "websockets",
-    "python-dotenv",
-    "confluent-kafka",
-    "cassandra-driver",
-]
+dependencies = ["pyspark", "websockets", "python-dotenv", "confluent-kafka"]
 
 [project.optional-dependencies]
-dev = ["pytest", "flake8", "black", "isort"]
+dev = [
+    "pytest",
+    "flake8",
+    "black",
+    "isort",
+    "cassandra-driver",
+    "streamlit",
+    "matplotlib",
+    "polars",
+]
+web = ["cassandra-driver", "streamlit", "polars", "matplotlib"]
 
 [project.scripts]
 opensea-client = "opensea_client.cli.main:main"

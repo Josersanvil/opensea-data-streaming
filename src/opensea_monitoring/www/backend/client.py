@@ -36,7 +36,9 @@ class OpenSeaDataMonitoringClient:
         self._cluster = self._get_cassandra_cluster(
             cassandra_host, cassandra_username, cassandra_password, cassandra_port
         )
-        self._session = self._cluster.connect(default_keyspace)
+        self._session = self._cluster.connect(
+            default_keyspace or settings.cassandra_default_keyspace
+        )
         self._session.row_factory = dict_factory
         connection.set_session(self._session)
 

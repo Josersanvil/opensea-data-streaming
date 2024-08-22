@@ -10,6 +10,7 @@ def get_spark_session(
     app_name: Optional[str] = settings.spark_app_name,
     master: Optional[str] = settings.spark_master,
     config: Optional[SparkConf | dict[str, Any]] = None,
+    enable_eager_eval: bool = False,
 ) -> SparkSession:
     """
     Retrieves a Spark session with the provided configuration.
@@ -29,4 +30,6 @@ def get_spark_session(
         .getOrCreate()
     )
     spark.sparkContext.setLogLevel(settings.spark_log_level)
+    if enable_eager_eval:
+        spark.conf.set("spark.sql.repl.eagerEval.enabled", "true")
     return spark

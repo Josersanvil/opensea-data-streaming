@@ -16,6 +16,8 @@ RUN pip install jupyterlab py4j
 # Copy spark-defaults.conf
 COPY ./spark-conf/spark-defaults.conf /opt/bitnami/spark/conf/spark-defaults.conf
 
+# Install the spakr dependencies (# TODO)
+
 WORKDIR /app
 
 # Install application dependencies
