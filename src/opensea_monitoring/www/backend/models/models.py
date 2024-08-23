@@ -9,9 +9,9 @@ class GlobalMetrics(Model):
     The model is meant to be used as a read-only model to retrieve the
     global metrics for the OpenSea data.
 
-    Primary key (composite key): metric, timestamp
+    Primary key (composite key): metric, collection, timestamp
     Partition Key: metric
-    Clustering Key: timestamp (DESC)
+    Clustering Key: collection, timestamp (DESC)
     """
 
     __table_name__ = "global_metrics"
@@ -21,7 +21,7 @@ class GlobalMetrics(Model):
         primary_key=True, clustering_order="DESC", db_field="timestamp"
     )
     value = columns.Double()
-    collection = columns.Text()
+    collection = columns.Text(primary_key=True, default="", clustering_order="ASC")
 
 
 class CollectionMetrics(Model):

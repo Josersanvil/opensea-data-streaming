@@ -54,7 +54,7 @@ def get_transactions_events(
         F.concat("metric", F.lit(f"__{time_frame_txt}")).alias("metric"),
         F.col("window_end").alias("timestamp"),
         "value",
-        F.lit(None).alias("collection"),
+        F.lit("").alias("collection"),
     )
     return windowed_transactions_events
 
@@ -101,7 +101,7 @@ def get_sales_volume_events(
         F.concat("metric", F.lit(f"__{time_frame_txt}")).alias("metric"),
         F.col("window_end").alias("timestamp"),
         "value",
-        F.lit(None).alias("collection"),
+        F.lit("").alias("collection"),
     )
     return windowed_sales_events
 
@@ -113,10 +113,10 @@ def get_top_collections_by_volume_events(
 ) -> "DataFrame":
     """
     Extracts the top collections by volume over time from a cleaned events DataFrame,
-    by grouping the transferred items by in the specified time frame.
+    by grouping the sold items in the specified time frame.
 
     @param clean_events: The cleaned events DataFrame.
-    @return: A DataFrame with the top collections by volume over time.
+    @return: A DataFrame with the top collections by sales volume over time.
     """
     sold_items = get_sales_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
@@ -146,6 +146,51 @@ def get_top_collections_by_volume_events(
         F.lit(f"top_collections_by_volume__{time_frame_txt}").alias("metric"),
         F.col("window_end").alias("timestamp"),
         F.col("usd_volume").alias("value"),
+        F.col("collection_slug").alias("collection"),
+    ).filter(F.col("window_rank") <= 10)
+    return top_collections_events
+
+
+def get_top_collections_by_transactions_volume_events(
+    clean_events: "DataFrame",
+    window_duration: str,
+    slide_duration: Optional[str] = None,
+) -> "DataFrame":
+    """
+    Extracts the top collections by volume of transactions over time from a
+    cleaned events DataFrame by grouping the transferred items
+    in the specified time frame.
+
+    @param clean_events: The cleaned events DataFrame.
+    @return: A DataFrame with the top collections by transaction volume over time.
+    """
+    transferred_items = get_transferred_items(clean_events)
+    time_frame_txt = "_".join(window_duration.split())
+    time_window = F.window("sent_at", window_duration, slide_duration)
+    top_collections = (
+        transferred_items.groupby("collection_slug", time_window)
+        .agg(F.count("*").alias("transactions_count"))
+        .orderBy(F.desc("transactions_count"))
+        .select(
+            "collection_slug",
+            F.col("window.start").alias("window_start"),
+            F.col("window.end").alias("window_end"),
+            "transactions_count",
+        )
+    ).withColumn(
+        "window_rank",
+        (
+            F.row_number().over(
+                Window.partitionBy("window_start", "window_end").orderBy(
+                    F.desc("transactions_count")
+                )
+            )
+        ),
+    )
+    top_collections_events = top_collections.select(
+        F.lit(f"top_collections_by_transactions__{time_frame_txt}").alias("metric"),
+        F.col("window_end").alias("timestamp"),
+        F.col("transactions_count").alias("value"),
         F.col("collection_slug").alias("collection"),
     ).filter(F.col("window_rank") <= 10)
     return top_collections_events

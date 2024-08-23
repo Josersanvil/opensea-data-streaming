@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS global_metrics (
     -- eg. 1000000, null
     collection text,
     -- eg. null, "CoolMonkeyCollection"
-    PRIMARY KEY ((metric), timestamp)
+    PRIMARY KEY ((metric), collection, timestamp)
 ) WITH CLUSTERING
-ORDER BY (timestamp DESC);
+ORDER BY (collection ASC, timestamp DESC);
 CREATE TABLE IF NOT EXISTS collections_metrics (
     metric text,
     -- eg. 'total_traded_volume_eur__24h', 'total_traded_volume_eur__1m', 'collection_top

@@ -95,9 +95,9 @@ class OpenSeaDataMonitoringClient:
             global_metrics = global_metrics.limit(limit)
         if order_ascending is not None:
             if order_ascending:
-                global_metrics = global_metrics.order_by("timestamp_at")
+                global_metrics = global_metrics.order_by("collection", "timestamp_at")
             else:
-                global_metrics = global_metrics.order_by("-timestamp_at")
+                global_metrics = global_metrics.order_by("collection", "-timestamp_at")
         return list(global_metrics)
 
     def get_collection_metrics(

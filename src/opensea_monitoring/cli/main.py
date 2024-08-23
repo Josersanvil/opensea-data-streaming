@@ -14,6 +14,7 @@ from opensea_monitoring.utils.kafka import (
     get_kafka_stream_writer,
     write_df_to_kafka_topic,
 )
+from opensea_monitoring.utils.schemas import get_opensea_raw_events_schema
 from opensea_monitoring.utils.spark import get_spark_session
 from opensea_monitoring.utils.timestamp import parse_timestamp
 
@@ -36,10 +37,11 @@ BATCH_OPTIONS = {
     "1 day",
     "12 hours",
     "1 hour",
+    "5 minutes",
 }
 STREAM_OPTIONS = {
-    "5 minutes",
     "1 minute",
+    "30 seconds",
 }
 
 
@@ -148,7 +150,7 @@ def _get_raw_events_batch(
     s3_path = f"{args.raw_events_s3_uri}/year=*/month=*/day=*/hour=*/*.json.gz"
     logger = get_logger("get_raw_events_batch")
     logger.debug(f"Reading raw events from '{s3_path}'")
-    raw_events = spark.read.json(s3_path)
+    raw_events = spark.read.json(s3_path, schema=get_opensea_raw_events_schema())
     return raw_events
 
 
@@ -204,11 +206,17 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
     top_collections_sales = global_processors.get_top_collections_by_volume_events(
         clean_events, args.time_window
     )
+    top_collections_transactions = (
+        global_processors.get_top_collections_by_transactions_volume_events(
+            clean_events, args.time_window
+        )
+    )
     # Concatenate the events:
     global_events = (
         transactions_events[GLOBAL_EVENTS_COLS]
         .union(marketplace_sales[GLOBAL_EVENTS_COLS])
         .union(top_collections_sales[GLOBAL_EVENTS_COLS])
+        .union(top_collections_transactions[GLOBAL_EVENTS_COLS])
     )
     events_cnt = global_events.count()
     logger.info(f"Processed {events_cnt} events.")

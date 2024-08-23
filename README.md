@@ -144,7 +144,7 @@ Depending on the execution mode, you can process the data in batch or stream mod
 Use the following command to see all the available options of the script:
 
 ```bash
-docker compose --profile kafka exec -it spark python -m opensea_monitoring.cli --help
+docker compose --profile spark exec -it spark python -m opensea_monitoring.cli --help
 ```
 
 #### Process global events in Batch mode
@@ -152,7 +152,8 @@ docker compose --profile kafka exec -it spark python -m opensea_monitoring.cli -
 This command will process the global events in batch mode. It will read the raw events retrieved from the OpenSea API in an S3 bucket and write the enriched events to the Kafka topic `OpenSeaEnrichedGlobalEvents`. The data will be aggregated in 1 hour windows.
 
 ```sh
-docker compose --profile all exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
+docker compose --profile spark --profile kafka \
+    exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
     python -m opensea_monitoring.cli global '1 hour' \
     --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
     --raw-events-kafka-topic OpenSeaRawEvents \

@@ -71,6 +71,7 @@ services:
       - "8081:8081"
     volumes:
       - ./spark-conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      - ./src:/app/src
     healthcheck:
       test:
         [

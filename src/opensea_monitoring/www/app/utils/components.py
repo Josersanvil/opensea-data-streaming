@@ -86,7 +86,7 @@ def render_as_table(
     grain: str = "1 day",
     collection: Optional[str] = None,
     n: int = 10,
-    collection_href_col: Optional[str] = None,
+    collection_href_col: str = "collection",
     container: "DeltaGenerator | ModuleType" = st,
 ) -> "DeltaGenerator":
     """
@@ -107,7 +107,13 @@ def render_as_table(
                 collection_href_col,
             )
         )
-    return container.table(table_df)
+    md_table_str = "| Name  | Count | Details |\n| --- | --- | --- |\n"
+    for i in range(len(table_df)):
+        see_more = table_df.item(i, collection_href_col)
+        md_table_str += f"{table_df.item(i, 'collection')} |"
+        md_table_str += f"{table_df.item(i, 'value'):,.0f} |"
+        md_table_str += f"{see_more} |\n"
+    return container.markdown(md_table_str, unsafe_allow_html=True)
 
 
 def grain_options(
@@ -121,9 +127,12 @@ def grain_options(
     @param title: The title of the selectbox
     @param container: Optional container to render the selectbox in
     """
-    grain_opts = GlobalMetricsConfig.plots_config["transfers_count"]["grain_options"]
+    grain_opts = GlobalMetricsConfig.plots_config["total_transfers"]["grain_options"]
+    default_option = GlobalMetricsConfig.plots_config["total_transfers"][
+        "default_grain"
+    ]
     return container.selectbox(
         title,
         grain_opts,
-        index=0,
+        index=grain_opts.index(default_option),
     )

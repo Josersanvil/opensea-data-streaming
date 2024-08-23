@@ -23,96 +23,71 @@ def get_clean_events(
     """
     df_events = raw_events.select(
         "event",
-        # F.col("payload.event_type").alias("event_type"),
         _get_payload_value_as_col(
             "event_type", "event_type", is_json_payload=is_json_payload
         ),
-        # F.col("payload.payload.collection.slug").alias("collection_slug"),
         _get_payload_value_as_col(
             "payload.collection.slug",
             "collection_slug",
             is_json_payload=is_json_payload,
         ),
-        # F.to_timestamp("payload.sent_at").alias("sent_at"),
         _get_payload_value_as_col(
             "sent_at", "sent_at", T.TimestampType(), is_json_payload=is_json_payload
         ),
-        # F.col("payload.status").alias("status"),
         _get_payload_value_as_col("status", "status", is_json_payload=is_json_payload),
-        # F.col("payload.payload.item.metadata.name").alias("item_name"),
         _get_payload_value_as_col(
             "payload.item.metadata.name", "item_name", is_json_payload=is_json_payload
         ),
-        # F.col("payload.payload.item.permalink").alias("item_url"),
         _get_payload_value_as_col(
             "payload.item.permalink", "item_url", is_json_payload=is_json_payload
         ),
-        # F.col("payload.payload.item.nft_id").alias("item_nft_id"),
         _get_payload_value_as_col(
             "payload.item.nft_id", "item_nft_id", is_json_payload=is_json_payload
         ),
-        # F.col("payload.payload.item.metadata.image_url").alias("image_url"),
         _get_payload_value_as_col(
             "payload.item.metadata.image_url",
             "image_url",
             is_json_payload=is_json_payload,
         ),
-        # F.col("payload.payload.item.chain.name").alias("item_blockchain"),
         _get_payload_value_as_col(
             "payload.item.chain.name",
             "item_blockchain",
             is_json_payload=is_json_payload,
         ),
-        # F.to_timestamp(F.col("payload.payload.listing_date")).alias("listing_date"),
         _get_payload_value_as_col(
             "payload.listing_date",
             "listing_date",
             T.TimestampType(),
             is_json_payload=is_json_payload,
         ),
-        # F.col("payload.payload.listing_type").alias("listing_type"),
         _get_payload_value_as_col(
             "payload.listing_type", "listing_type", is_json_payload=is_json_payload
         ),
-        # F.col("payload.payload.from_account.address").alias("from_account"),
         _get_payload_value_as_col(
             "payload.from_account.address",
             "from_account",
             is_json_payload=is_json_payload,
         ),
-        # F.col("payload.payload.to_account.address").alias("to_account"),
         _get_payload_value_as_col(
             "payload.to_account.address", "to_account", is_json_payload=is_json_payload
         ),
-        # F.col("payload.payload.payment_token.symbol").alias("payment_symbol"),
         _get_payload_value_as_col(
             "payload.payment_token.symbol",
             "payment_symbol",
             is_json_payload=is_json_payload,
         ),
-        # (
-        #     F.col("payload.payload.payment_token.eth_price")
-        #     .cast(T.DoubleType())
-        #     .alias("eth_price")
-        # ),
         _get_payload_value_as_col(
             "payload.payment_token.eth_price",
             "eth_price",
             T.DoubleType(),
             is_json_payload=is_json_payload,
         ),
-        # (
-        #     F.col("payload.payload.payment_token.usd_price")
-        #     .cast(T.DoubleType())
-        #     .alias("usd_price")
-        # ),
         _get_payload_value_as_col(
             "payload.payment_token.usd_price",
             "usd_price",
             T.DoubleType(),
             is_json_payload=is_json_payload,
         ),
-        # F.col("payload.payload.quantity").cast(T.IntegerType()).alias("quantity"),
         _get_payload_value_as_col(
             "payload.quantity",
             "quantity",
