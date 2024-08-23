@@ -3,8 +3,10 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, Type
 import plotly.express as px
 import polars as pl
 import streamlit as st
+from dotenv import load_dotenv
 
 from opensea_monitoring.www.app.utils.configs import (
+    AppConfig,
     CollectionMetricsConfig,
     GlobalMetricsConfig,
 )
@@ -24,6 +26,7 @@ def get_metric(
     as_frame: bool = False,
 ) -> Iterable[dict[str, Any]] | pl.DataFrame:
     client = OpenSeaDataMonitoringClient(default_keyspace="opensea")
+    grain = AppConfig.grain_options["options"][grain]["grain_value"]
     if collection:
         results = client.get_collection_metrics(
             collection=collection, metric=metric_name, grain=grain, order_ascending=True
@@ -49,7 +52,7 @@ def get_config(
 
 def linear_plot(
     metric: str,
-    grain: str = "1 day",
+    grain: str,
     collection: Optional[str] = None,
 ):
     """
@@ -68,7 +71,7 @@ def linear_plot(
 
 def multilinear_plot(
     metric: str,
-    grain: str = "1 day",
+    grain: str,
     collection: Optional[str] = None,
     n: int = 10,
 ):
@@ -89,7 +92,7 @@ def multilinear_plot(
 def render_as_table(
     metric: str,
     col_group: str,
-    grain: str = "1 day",
+    grain: str,
     collection: Optional[str] = None,
     n: int = 10,
     href_page: Optional[str] = None,
@@ -143,12 +146,46 @@ def grain_options(
     @param title: The title of the selectbox
     @param container: Optional container to render the selectbox in
     """
-    grain_opts = GlobalMetricsConfig.plots_config["total_transfers"]["grain_options"]
-    default_option = GlobalMetricsConfig.plots_config["total_transfers"][
-        "default_grain"
-    ]
+    opts = list(AppConfig.grain_options["options"])
+    default_option = AppConfig.grain_options["default_value"]
     return container.selectbox(
         title,
-        grain_opts,
-        index=grain_opts.index(default_option),
+        opts,
+        index=opts.index(default_option),
     )
+
+
+def refresh_rate_options(
+    title: str = "Refresh rate",
+    container: "DeltaGenerator | ModuleType" = st,
+):
+    """
+    Renders a selectbox with the refresh rate options
+    for the plots.
+
+    @param container: Optional container to render the selectbox in
+    """
+    opts = list(AppConfig.refresh_rate_options["options"])
+    default_option = AppConfig.refresh_rate_options["default_value"]
+    return container.selectbox(
+        title,
+        opts,
+        index=opts.index(default_option),
+    )
+
+
+def init_page(page_title: str) -> dict[str, Any]:
+    st.set_page_config(page_title, layout="wide", initial_sidebar_state="collapsed")
+
+    load_dotenv()
+
+    st.title(page_title)
+    c1, c2, _ = st.columns([0.2, 0.2, 0.6])
+    grain = str(grain_options("Granularidad", container=c1))
+    refresh_rate = str(refresh_rate_options("Tiempo de refresh", container=c2))
+    refresh_rate_value_secs = AppConfig.refresh_rate_options["options"][refresh_rate][
+        "value_secs"
+    ]
+    st.text(f"Refresh rate is set to {refresh_rate_value_secs} seconds")
+    st.divider()
+    return {"grain": grain, "refresh_rate_value_secs": refresh_rate_value_secs}
