@@ -18,18 +18,22 @@ if TYPE_CHECKING:
 
 @st.cache_data
 def get_metric(
-    metric_name: str, grain: str, collection: Optional[str] = None
-) -> Iterable[dict[str, Any]]:
+    metric_name: str,
+    grain: str,
+    collection: Optional[str] = None,
+    as_frame: bool = False,
+) -> Iterable[dict[str, Any]] | pl.DataFrame:
     client = OpenSeaDataMonitoringClient(default_keyspace="opensea")
     if collection:
         results = client.get_collection_metrics(
             collection=collection, metric=metric_name, grain=grain, order_ascending=True
         )
     else:
-        results = client.get_global_metrics(
-            metric=metric_name, grain=grain, order_ascending=True
-        )
-    return map(dict, results)
+        results = client.get_global_metrics(metric=metric_name, grain=grain)
+    results_iter = map(dict, results)
+    if as_frame:
+        return pl.DataFrame(results_iter)
+    return results_iter
 
 
 def get_config(
@@ -66,6 +70,7 @@ def multilinear_plot(
     metric: str,
     grain: str = "1 day",
     collection: Optional[str] = None,
+    n: int = 10,
 ):
     """
     Renders a multilinear plot for a given metric
@@ -74,7 +79,7 @@ def multilinear_plot(
     """
     config = get_config("collection" if collection else "global")
     data = get_metric(metric, grain, collection)
-    df = pl.DataFrame(data, schema=config.df_schema)
+    df = pl.DataFrame(data, schema=config.df_schema).limit(n)
     fig = px.line(df.to_pandas(), x="timestamp_at", y="value", color="collection")
     fig.update_layout(title=f"{config.plots_config[metric]['title']} ({grain})")
     fig.update_xaxes(title_text="Timestamp")
@@ -83,10 +88,13 @@ def multilinear_plot(
 
 def render_as_table(
     metric: str,
+    col_group: str,
     grain: str = "1 day",
     collection: Optional[str] = None,
     n: int = 10,
-    collection_href_col: str = "collection",
+    href_page: Optional[str] = None,
+    col_group_alias: Optional[str] = None,
+    value_alias: Optional[str] = None,
     container: "DeltaGenerator | ModuleType" = st,
 ) -> "DeltaGenerator":
     """
@@ -94,25 +102,33 @@ def render_as_table(
     specified grain and collection.
     """
     data = get_metric(metric, grain, collection)
-    table_df = pl.DataFrame(data).limit(n)
-    if collection_href_col:
+    table_df = (
+        pl.DataFrame(data)
+        .group_by(col_group)
+        .sum()
+        .limit(n)
+        .sort("value", descending=True)
+    )
+    if href_page:
         table_df = table_df.with_columns(
             pl.concat_str(
                 [
-                    pl.lit("<a target='_Self' href='/collections?name="),
-                    table_df[collection_href_col],
-                    pl.lit("'>Ver detalles</a>"),
+                    pl.lit(f"<a target='_Self' href='{href_page}"),
+                    table_df[col_group],
+                    pl.lit("'>"),
+                    table_df[col_group],
+                    pl.lit("</a>"),
                 ]
             ).alias(
-                collection_href_col,
+                col_group,
             )
         )
-    md_table_str = "| Name  | Count | Details |\n| --- | --- | --- |\n"
+    col_group_alias = col_group_alias or col_group
+    value_alias = value_alias or "Value"
+    md_table_str = f"| {col_group_alias}  | {value_alias} |\n| --- | --- |\n"
     for i in range(len(table_df)):
-        see_more = table_df.item(i, collection_href_col)
-        md_table_str += f"{table_df.item(i, 'collection')} |"
-        md_table_str += f"{table_df.item(i, 'value'):,.0f} |"
-        md_table_str += f"{see_more} |\n"
+        md_table_str += f"{table_df.item(i, col_group)} |"
+        md_table_str += f"{table_df.item(i, 'value'):,.0f} |\n"
     return container.markdown(md_table_str, unsafe_allow_html=True)
 
 

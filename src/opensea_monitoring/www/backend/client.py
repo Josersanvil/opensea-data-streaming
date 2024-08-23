@@ -59,7 +59,6 @@ class OpenSeaDataMonitoringClient:
         from_ts: Optional["datetime"] = None,
         to_ts: Optional["datetime"] = None,
         limit: Optional[int] = None,
-        order_ascending: Optional[bool] = None,
     ) -> list[GlobalMetrics]:
         """
         Retrieves the global metrics from the Cassandra database.
@@ -72,11 +71,6 @@ class OpenSeaDataMonitoringClient:
         @param from_ts: The start timestamp to filter by.
         @param to_ts: The end timestamp to filter by.
         @param limit: The maximum number of results to return.
-        @param order_ascending: Use this to specify the order of the results.
-            If True, the results will be sorted in ascending order by timestamp.
-            If False, the results will be sorted in descending order by timestamp.
-            Default is None, which means the results will be returned in the order
-            they were inserted in the database.
         @return: A list of GlobalMetrics objects.
         """
         if bool(metric) ^ bool(grain):
@@ -93,11 +87,6 @@ class OpenSeaDataMonitoringClient:
             global_metrics = global_metrics.filter(timestamp_at__lte=to_ts)
         if limit:
             global_metrics = global_metrics.limit(limit)
-        if order_ascending is not None:
-            if order_ascending:
-                global_metrics = global_metrics.order_by("collection", "timestamp_at")
-            else:
-                global_metrics = global_metrics.order_by("collection", "-timestamp_at")
         return list(global_metrics)
 
     def get_collection_metrics(

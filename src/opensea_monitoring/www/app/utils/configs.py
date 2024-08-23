@@ -66,7 +66,7 @@ class GlobalMetricsConfig:
 class CollectionMetricsConfig:
 
     plots_config = {
-        "total_items_transferred": {
+        "total_transfers": {
             "type": "linear",
             "grain_options": ["1 hour", "1 day"],
             "default_grain": "1 hour",
@@ -93,6 +93,13 @@ class CollectionMetricsConfig:
             "default_grain": "1 hour",
             "title": "Volumen de ventas (ETH)",
             "axes": {"x": "timestamp_at", "y": "value"},
+        },
+        "collection_top_assets_by_usd_volume": {
+            "type": "multilinear",
+            "grain_options": ["1 minute", "5 minute", "1 hour", "1 day"],
+            "default_grain": "1 hour",
+            "title": "Top Assets por volumen de ventas",
+            "axes": {"x": "timestamp_at", "y": "value", "hue": "asset"},
         },
     }
 
