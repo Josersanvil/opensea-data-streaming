@@ -12,14 +12,15 @@ if TYPE_CHECKING:
     from pyspark.sql import DataFrame
 
 
-def get_top_collections_assets_events(
+def get_top_collections_assets_by_sales(
     clean_events: "DataFrame",
     window_duration: str,
     slide_duration: Optional[str] = None,
 ) -> "DataFrame":
     """
-    Extracts the collections assets over time from a cleaned events DataFrame,
-    by grouping the transferred items by in the specified time frame.
+    Extracts the top collections' assets over time from a
+    cleaned events DataFrame by grouping the sold items
+    by the specified time frame.
 
     @param clean_events: The cleaned events DataFrame.
     @return: A DataFrame with the collections assets over time.
@@ -27,33 +28,97 @@ def get_top_collections_assets_events(
     sold_items = get_sales_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
     time_window = F.window("sent_at", window_duration, slide_duration)
-    collections_assets_ranked = sold_items.select(
-        "collection_slug",
-        "item_blockchain",
-        "item_nft_id",
-        "item_url",
-        "item_name",
-        "image_url",
-        "usd_price",
-        "sent_at",
-        time_window,
-    ).withColumn(
-        "rank_by_price",
+    collections_assets_sales = (
+        sold_items.groupBy(
+            "collection_slug",
+            "item_nft_id",
+            "item_name",
+            "item_url",
+            "image_url",
+            time_window,
+        )
+        .agg(F.sum("usd_price").alias("usd_volume"))
+        .select(
+            F.col("collection_slug").alias("collection"),
+            F.col("window.end").alias("timestamp"),
+            F.coalesce("item_name", "item_nft_id").alias("asset_name"),
+            F.col("item_url").alias("asset_url"),
+            "image_url",
+            "usd_volume",
+        )
+    )
+    collections_assets_ranked = collections_assets_sales.withColumn(
+        "rank_by_volume",
         F.row_number().over(
-            Window.partitionBy("collection_slug", "window.start", "window.end").orderBy(
-                F.desc("usd_price")
+            Window.partitionBy("collection", "timestamp").orderBy(F.desc("usd_volume"))
+        ),
+    )
+    top_collections_assets_events = collections_assets_ranked.select(
+        F.lit(f"collection_top_assets_by_sales_volume__{time_frame_txt}").alias(
+            "metric"
+        ),
+        "timestamp",
+        "collection",
+        F.col("usd_volume").alias("value"),
+        "asset_name",
+        "asset_url",
+        "image_url",
+    ).filter(F.col("rank_by_volume") <= 20)
+    return top_collections_assets_events
+
+
+def get_top_collections_assets_by_transfers(
+    clean_events: "DataFrame",
+    window_duration: str,
+    slide_duration: Optional[str] = None,
+) -> "DataFrame":
+    """
+    Extracts the top collections' assets over time from a
+    cleaned events DataFrame by grouping the transferred items
+    by the specified time frame.
+
+    @param clean_events: The cleaned events DataFrame.
+    @return: A DataFrame with the collections assets over time.
+    """
+    transferred_items = get_transferred_items(clean_events)
+    time_frame_txt = "_".join(window_duration.split())
+    time_window = F.window("sent_at", window_duration, slide_duration)
+    collections_assets_transfers = (
+        transferred_items.groupBy(
+            "collection_slug",
+            "item_nft_id",
+            "item_name",
+            "item_url",
+            "image_url",
+            time_window,
+        )
+        .agg(F.count("*").alias("total_transfers"))
+        .select(
+            F.col("collection_slug").alias("collection"),
+            F.col("window.end").alias("timestamp"),
+            F.coalesce("item_name", "item_nft_id").alias("asset_name"),
+            F.col("item_url").alias("asset_url"),
+            "image_url",
+            "total_transfers",
+        )
+    )
+    collections_assets_ranked = collections_assets_transfers.withColumn(
+        "rank_by_transfers",
+        F.row_number().over(
+            Window.partitionBy("collection", "timestamp").orderBy(
+                F.desc("total_transfers")
             )
         ),
     )
     top_collections_assets_events = collections_assets_ranked.select(
-        F.lit(f"collection_top_assets_by_usd_volume__{time_frame_txt}").alias("metric"),
-        F.col("window.end").alias("timestamp"),
-        F.col("collection_slug").alias("collection"),
-        F.col("usd_price").alias("value"),
-        F.col("item_name").alias("asset_name"),
-        F.col("item_url").alias("asset_url"),
+        F.lit(f"collection_top_assets_by_transfers__{time_frame_txt}").alias("metric"),
+        "timestamp",
+        "collection",
+        F.col("total_transfers").alias("value"),
+        "asset_name",
+        "asset_url",
         "image_url",
-    ).filter(F.col("rank_by_price") <= 20)
+    ).filter(F.col("rank_by_transfers") <= 20)
     return top_collections_assets_events
 
 

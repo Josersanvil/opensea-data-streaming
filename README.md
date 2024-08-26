@@ -170,7 +170,7 @@ docker compose --profile kafka exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://s
     --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
     --raw-events-kafka-topic OpenSeaRawEvents \
     --kafka-brokers kafka:19092 \
-    --kafka-topic OpenSeaEnrichedGlobalEvents \
+    --kafka-topic OpenSeaEnrichedCollectionsEvents \
     -l INFO
 ```
 

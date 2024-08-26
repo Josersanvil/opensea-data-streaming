@@ -1,6 +1,7 @@
-from typing import TYPE_CHECKING, Any, Iterable, Optional, Type
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Type, cast
 
 import plotly.express as px
+import plotly.graph_objects as go
 import polars as pl
 import streamlit as st
 from dotenv import load_dotenv
@@ -50,6 +51,36 @@ def get_config(
         raise ValueError("Invalid metric type")
 
 
+def indicator(
+    metric: str,
+    grain: str = "",
+    collection: Optional[str] = None,
+):
+    """
+    Renders an indicator for the specified metric
+    using the specified collection.
+    """
+    config = get_config("collection" if collection else "global")
+    data = get_metric(metric, grain, collection, as_frame=True)
+    data = cast(pl.DataFrame, data)
+    metric_config = config.plots_config[metric]
+    if data.is_empty():
+        value = None
+    else:
+        value = data["value"][0]
+    fig = go.Figure(
+        layout=go.Layout(height=250),
+    )
+    fig.add_trace(
+        go.Indicator(
+            mode="number",
+            value=value,
+            title={"text": metric_config["title"]},
+        )
+    )
+    st.plotly_chart(fig)
+
+
 def linear_plot(
     metric: str,
     grain: str,
@@ -62,9 +93,12 @@ def linear_plot(
     """
     config = get_config("collection" if collection else "global")
     data = get_metric(metric, grain, collection)
+    metric_config = config.plots_config[metric]
     df = pl.DataFrame(data, schema=config.df_schema)
-    fig = px.line(df.to_pandas(), x="timestamp_at", y="value")
-    fig.update_layout(title=f"{config.plots_config[metric]['title']} ({grain})")
+    fig = px.line(
+        df.to_pandas(), x=metric_config["axes"]["x"], y=metric_config["axes"]["y"]
+    )
+    fig.update_layout(title=f"{metric_config['title']} ({grain})")
     fig.update_xaxes(title_text="Timestamp")
     st.plotly_chart(fig)
 
@@ -82,9 +116,18 @@ def multilinear_plot(
     """
     config = get_config("collection" if collection else "global")
     data = get_metric(metric, grain, collection)
+    metric_config = config.plots_config[metric]
     df = pl.DataFrame(data, schema=config.df_schema).limit(n)
-    fig = px.line(df.to_pandas(), x="timestamp_at", y="value", color="collection")
-    fig.update_layout(title=f"{config.plots_config[metric]['title']} ({grain})")
+    fig = px.line(
+        df.to_pandas(),
+        x=metric_config["axes"]["x"],
+        y=metric_config["axes"]["y"],
+        color=metric_config["axes"]["hue"],
+    )
+    fig.update_layout(
+        title=f"{metric_config['title']} ({grain})",
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+    )
     fig.update_xaxes(title_text="Timestamp")
     st.plotly_chart(fig)
 
@@ -96,21 +139,33 @@ def render_as_table(
     collection: Optional[str] = None,
     n: int = 10,
     href_page: Optional[str] = None,
+    href_col: Optional[str] = None,
     col_group_alias: Optional[str] = None,
     value_alias: Optional[str] = None,
     container: "DeltaGenerator | ModuleType" = st,
-) -> "DeltaGenerator":
+):
     """
     Renders the metric as a table with the
     specified grain and collection.
+    Retrieves the latest values for the
+    specified metric and group.
     """
-    data = get_metric(metric, grain, collection)
+    data = get_metric(metric, grain, collection, as_frame=True)
+    data = cast(pl.DataFrame, data)
+    if data.is_empty():
+        return container.write("No data available")
+    group_latest = (
+        data.group_by(col_group).agg(
+            pl.max("timestamp_at").alias("timestamp_at"),
+        )
+    ).select(
+        col_group,
+        "timestamp_at",
+    )
     table_df = (
-        pl.DataFrame(data)
-        .group_by(col_group)
-        .sum()
-        .limit(n)
+        data.join(group_latest, on=[col_group, "timestamp_at"], how="inner")
         .sort("value", descending=True)
+        .limit(n)
     )
     if href_page:
         table_df = table_df.with_columns(
@@ -118,6 +173,20 @@ def render_as_table(
                 [
                     pl.lit(f"<a target='_Self' href='{href_page}"),
                     table_df[col_group],
+                    pl.lit("'>"),
+                    table_df[col_group],
+                    pl.lit("</a>"),
+                ]
+            ).alias(
+                col_group,
+            )
+        )
+    elif href_col:
+        table_df = table_df.with_columns(
+            pl.concat_str(
+                [
+                    pl.lit("<a href='"),
+                    table_df[href_col],
                     pl.lit("'>"),
                     table_df[col_group],
                     pl.lit("</a>"),

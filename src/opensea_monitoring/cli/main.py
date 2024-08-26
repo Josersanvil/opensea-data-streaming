@@ -273,7 +273,12 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
             F.col("sent_at") <= F.lit(args.timestamp_end)
         )
     collections_assets_events = (
-        collections_processors.get_top_collections_assets_events(
+        collections_processors.get_top_collections_assets_by_sales(
+            clean_events, args.time_window
+        )
+    )
+    collections_assets_by_transfers_events = (
+        collections_processors.get_top_collections_assets_by_transfers(
             clean_events, args.time_window
         )
     )
@@ -285,9 +290,11 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
             clean_events, args.time_window
         )
     )
+
     # Concatenate the events:
     collections_events = (
         collections_assets_events[COLLECTIONS_EVENTS_COLS]
+        .union(collections_assets_by_transfers_events[COLLECTIONS_EVENTS_COLS])
         .union(collection_sales_events[COLLECTIONS_EVENTS_COLS])
         .union(collection_transactions_events[COLLECTIONS_EVENTS_COLS])
     )
