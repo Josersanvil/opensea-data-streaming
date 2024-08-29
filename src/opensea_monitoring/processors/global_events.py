@@ -110,6 +110,7 @@ def get_top_collections_by_volume_events(
     clean_events: "DataFrame",
     window_duration: str,
     slide_duration: Optional[str] = None,
+    watermark_duration: Optional[str] = None,
 ) -> "DataFrame":
     """
     Extracts the top collections by volume over time from a cleaned events DataFrame,
@@ -121,6 +122,8 @@ def get_top_collections_by_volume_events(
     sold_items = get_sales_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
     time_window = F.window("sent_at", window_duration, slide_duration)
+    if watermark_duration:
+        sold_items = sold_items.withWatermark("sent_at", watermark_duration)
     top_collections = (
         (
             sold_items.groupby("collection_slug", time_window)
@@ -130,7 +133,6 @@ def get_top_collections_by_volume_events(
                 F.min("usd_price").alias("floor_usd_price"),
                 F.avg("usd_price").alias("avg_usd_price"),
             )
-            .orderBy(F.desc("usd_volume"))
             .select(
                 "collection_slug",
                 F.col("window.start").alias("window_start"),
@@ -176,6 +178,7 @@ def get_top_collections_by_transactions_volume_events(
     clean_events: "DataFrame",
     window_duration: str,
     slide_duration: Optional[str] = None,
+    watermark_duration: Optional[str] = None,
 ) -> "DataFrame":
     """
     Extracts the top collections by volume of transactions over time from a
@@ -188,6 +191,10 @@ def get_top_collections_by_transactions_volume_events(
     transferred_items = get_transferred_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
     time_window = F.window("sent_at", window_duration, slide_duration)
+    if watermark_duration:
+        transferred_items = transferred_items.withWatermark(
+            "sent_at", watermark_duration
+        )
     top_collections = (
         (
             transferred_items.groupby("collection_slug", time_window)

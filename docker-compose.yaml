@@ -128,6 +128,8 @@ services:
   # Create buckets
   minio-bucket:
     image: minio/mc
+    profiles:
+      - all
     depends_on:
       - minio
     entrypoint: [ "/bin/sh", "-c" ]
@@ -325,7 +327,6 @@ services:
   create-kafka-s3-connector:
     image: confluentinc/cp-kafka-connect:7.3.2
     profiles:
-      - kafka
       - all
     depends_on:
       kafka-connect:
@@ -334,10 +335,6 @@ services:
         condition: service_started
     volumes:
       - ./docker/kafka-connect/connectors/minio-s3-sink.json:/etc/kafka-connect/minio-s3-sink.json
-    # Keep open
-    # entrypoint: /bin/sh
-    # tty: true
-    # stdin_open: true
     entrypoint:
       [
         "/bin/sh",
@@ -387,8 +384,6 @@ services:
     profiles:
       - kafka
       - all
-    # ports:
-    #   - "8088:8088"
     environment:
       KSQL_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
       KSQL_LISTENERS: http://0.0.0.0:8088/
