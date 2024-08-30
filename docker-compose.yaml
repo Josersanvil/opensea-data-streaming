@@ -142,7 +142,6 @@ services:
   cassandra:
     image: bitnami/cassandra:4.1.5
     ports:
-      # - '7000:7000' # Internode communication
       - '9042:9042'
     volumes:
       - 'cassandra_data:/bitnami'
@@ -193,8 +192,6 @@ services:
     profiles:
       - kafka
       - all
-    # ports:
-    #   - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_SERVER_ID: 1
@@ -206,11 +203,6 @@ services:
     profiles:
       - kafka
       - all
-      # ports:
-      # - "9092:9092"
-      # - "19092:19092"
-      # - "29092:29092"
-      # - "9999:9999"
     environment:
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092,DOCKER://host.docker.internal:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
@@ -236,8 +228,6 @@ services:
     profiles:
       - kafka
       - all
-    # ports:
-    # - "8091:8081"
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
       SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
@@ -254,8 +244,6 @@ services:
     profiles:
       - kafka
       - all
-    # ports:
-    #   - "8082:8082"
     environment:
       KAFKA_REST_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
@@ -276,8 +264,6 @@ services:
     profiles:
       - kafka
       - all
-    # ports:
-    #   - "8083:8083"
     environment:
       CONNECT_BOOTSTRAP_SERVERS: "kafka:19092"
       CONNECT_REST_PORT: 8083
@@ -306,8 +292,9 @@ services:
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083" ]
       start_period: 12s
-      interval: 1s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
       - zookeeper
       - kafka

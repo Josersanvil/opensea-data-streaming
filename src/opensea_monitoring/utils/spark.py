@@ -22,7 +22,7 @@ def get_spark_session(
     if isinstance(config, dict):
         config = SparkConf().setAll(list(config.items()))
     if settings.spark_max_cpu_cores and not config.get("spark.cores.max"):
-        config.set("spark.executor.cores", str(settings.spark_max_cpu_cores))
+        config.set("spark.cores.max", str(settings.spark_max_cpu_cores))
     spark = (
         SparkSession.builder.appName(app_name)  # type: ignore
         .master(master)

@@ -58,12 +58,16 @@ def get_kafka_stream_writer(
             .option("truncate", "false")
         )
     else:
-        logger.info(f"Writing streaming data to Kafka topic {topic} at {kafka_brokers}")
+        logger.info(
+            f"Writing streaming data to Kafka topic '{topic}' "
+            f"at servers '{kafka_brokers}'"
+        )
         stream_writer = (
             stream_df.writeStream.format("kafka")
             .option("kafka.bootstrap.servers", kafka_brokers)
             .option("topic", topic)
             .option("checkpointLocation", checkpoint_location)
+            .outputMode("update")
         )
     return stream_writer
 
