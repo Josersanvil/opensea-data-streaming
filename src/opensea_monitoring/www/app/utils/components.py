@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from streamlit.delta_generator import DeltaGenerator
 
 
-@st.cache_data
 def get_metric(
     metric_name: str,
     grain: str,
@@ -27,7 +26,11 @@ def get_metric(
     as_frame: bool = False,
 ) -> Iterable[dict[str, Any]] | pl.DataFrame:
     client = OpenSeaDataMonitoringClient(default_keyspace="opensea")
-    grain = AppConfig.grain_options["options"][grain]["grain_value"]
+    grain = (
+        AppConfig.grain_options.get("options", {})
+        .get(grain, {})
+        .get("grain_value", grain)
+    )
     if collection:
         results = client.get_collection_metrics(
             collection=collection, metric=metric_name, grain=grain, order_ascending=True
@@ -55,6 +58,9 @@ def indicator(
     metric: str,
     grain: str = "",
     collection: Optional[str] = None,
+    container: "DeltaGenerator | ModuleType" = st,
+    order_by: Optional[str] = None,
+    order_descending: bool = True,
 ):
     """
     Renders an indicator for the specified metric
@@ -66,19 +72,37 @@ def indicator(
     metric_config = config.plots_config[metric]
     if data.is_empty():
         value = None
+        data_timestamp = None
     else:
+        if order_by:
+            data = data.sort(order_by, descending=order_descending)
         value = data["value"][0]
+        data_timestamp = data["timestamp_at"][0]
     fig = go.Figure(
         layout=go.Layout(height=250),
     )
-    fig.add_trace(
-        go.Indicator(
-            mode="number",
-            value=value,
-            title={"text": metric_config["title"]},
+    indicator_kwargs = {
+        "mode": "number",
+        "value": value,
+        "title": {"text": metric_config["title"]},
+    }
+    if metric_config.get("value_prefix"):
+        indicator_kwargs["number"] = {"prefix": metric_config.get("value_prefix")}
+    fig.add_trace(go.Indicator(**indicator_kwargs))
+    if data_timestamp:
+        # Add a last updated timestamp at the bottom center of the plot
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=-1,
+            showarrow=False,
+            text=(
+                "Ultima actualización:<br>"
+                f"{data_timestamp.strftime('%Y-%m-%d %H:%M:%S (UTC)')}"
+            ),
         )
-    )
-    st.plotly_chart(fig)
+    container.plotly_chart(fig)
 
 
 def linear_plot(
@@ -201,7 +225,7 @@ def render_as_table(
     for i in range(len(table_df)):
         md_table_str += f"{table_df.item(i, col_group)} |"
         md_table_str += f"{table_df.item(i, 'value'):,.0f} |\n"
-    return container.markdown(md_table_str, unsafe_allow_html=True)
+    return container.write(md_table_str, unsafe_allow_html=True)
 
 
 def grain_options(
@@ -243,18 +267,59 @@ def refresh_rate_options(
     )
 
 
-def init_page(page_title: str) -> dict[str, Any]:
+@st.fragment(run_every=60)
+def show_topbar_metrics(
+    metrics: list[str], grain: str, collection: Optional[str] = None
+):
+    metrics_cols = st.columns(len(metrics))
+    for metric, col in zip(metrics, metrics_cols):
+        indicator(
+            metric,
+            grain=grain,
+            collection=collection,
+            container=col,
+            order_by="timestamp_at",
+        )
+
+
+def init_page(
+    page_title: str,
+) -> dict[str, Any]:
     st.set_page_config(page_title, layout="wide", initial_sidebar_state="collapsed")
-
     load_dotenv()
-
     st.title(page_title)
+
+
+def show_granular_metrics_config():
+    st.write("## Métricas por granularidad")
     c1, c2, _ = st.columns([0.2, 0.2, 0.6])
     grain = str(grain_options("Granularidad", container=c1))
     refresh_rate = str(refresh_rate_options("Tiempo de refresh", container=c2))
     refresh_rate_value_secs = AppConfig.refresh_rate_options["options"][refresh_rate][
         "value_secs"
     ]
+    set_option("refresh_rate", refresh_rate_value_secs)
+    set_option("grain", grain)
     st.text(f"Refresh rate is set to {refresh_rate_value_secs} seconds")
     st.divider()
-    return {"grain": grain, "refresh_rate_value_secs": refresh_rate_value_secs}
+
+
+def get_option(
+    name: str,
+):
+    option_value = st.session_state.get(name)
+    config_options = getattr(AppConfig, f"{name}_options")
+    if not option_value:
+        option_value = config_options["options"][config_options["default_value"]][
+            "grain_value"
+        ]
+        set_option(name, option_value)
+    return option_value
+
+
+def set_option(
+    name: str,
+    value: str,
+):
+    st.session_state[name] = value
+    return value

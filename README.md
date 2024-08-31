@@ -196,6 +196,7 @@ This command will process the global events in stream mode. It will read a conti
 docker compose --profile kafka exec -it \
     -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 \
     -e OPENSEA_MONITORING_LOG_LEVEL=INFO \
+    -e OPENSEA_MONITORING_SPARK_MAX_CPU_CORES=1 \
     spark \
     python -m opensea_monitoring.cli global '1 minute' \
     --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
@@ -203,8 +204,8 @@ docker compose --profile kafka exec -it \
     --kafka-brokers kafka:19092 \
     --kafka-topic OpenSeaEnrichedGlobalEvents \
     --slide-duration '1 minute' \
-    --watermark-duration '1 minute' \
-    --checkpoint-dir s3a://processed-data/checkpoints/topics/OpenSeaEnrichedEvents/ \
+    --watermark-duration '3 minutes' \
+    --checkpoint-dir s3a://processed-data/checkpoints/topics/OpenSeaEnrichedGlobalEvents/ \
     -l INFO
 ```
 
@@ -214,15 +215,46 @@ docker compose --profile kafka exec -it \
 docker compose --profile kafka exec -it \
     -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 \
     -e OPENSEA_MONITORING_LOG_LEVEL=INFO \
+    -e OPENSEA_MONITORING_SPARK_MAX_CPU_CORES=1 \
     spark \
     python -m opensea_monitoring.cli collections '1 minute' \
     --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
     --raw-events-kafka-topic OpenSeaRawEvents \
     --kafka-brokers kafka:19092 \
-    --kafka-topic OpenSeaEnrichedGlobalEvents \
+    --kafka-topic OpenSeaEnrichedCollectionsEvents \
     --slide-duration '1 minute' \
-    --watermark-duration '1 minute' \
-    --checkpoint-dir s3a://processed-data/checkpoints/topics/OpenSeaEnrichedEvents/
+    --watermark-duration '3 minutes' \
+    --checkpoint-dir s3a://processed-data/checkpoints/topics/OpenSeaEnrichedCollectionsEvents/
+```
+
+#### Process all time global events
+
+All time global events can be processed by setting the time window to `all time`. This is available for both global and collection events, however, it can only be used in batch mode.
+
+For global events:
+
+```sh
+docker compose --profile spark --profile kafka \
+    exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
+    python -m opensea_monitoring.cli global 'all time' \
+    --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
+    --raw-events-kafka-topic OpenSeaRawEvents \
+    --kafka-brokers kafka:19092 \
+    --kafka-topic OpenSeaEnrichedGlobalEvents \
+    -l INFO
+```
+
+For collection events:
+
+```sh
+docker compose --profile spark --profile kafka \
+    exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
+    python -m opensea_monitoring.cli collections 'all time' \
+    --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
+    --raw-events-kafka-topic OpenSeaRawEvents \
+    --kafka-brokers kafka:19092 \
+    --kafka-topic OpenSeaEnrichedCollectionsEvents \
+    -l INFO
 ```
 
 #### Debug mode for streams

@@ -15,7 +15,7 @@ class AppConfig:
             "1 hora": {"grain_value": "1 hour"},
             "1 dia": {"grain_value": "1 day"},
         },
-        "default_value": "5 minutos",
+        "default_value": "1 minuto",
     }
     refresh_rate_options = {
         "options": {
@@ -49,6 +49,7 @@ class GlobalMetricsConfig:
             "type": "linear",
             "title": "Volumen de ventas (USD)",
             "axes": {"x": "timestamp_at", "y": "value"},
+            "value_prefix": "$",
         },
         "total_eth_volume": {
             "type": "linear",
@@ -91,14 +92,9 @@ class CollectionMetricsConfig:
             "title": "Numero de transacciones",
             "axes": {"x": "timestamp_at", "y": "value"},
         },
-        "total_usd_volume": {
+        "collection_total_sales_count": {
             "type": "linear",
-            "title": "Volumen de ventas (USD)",
-            "axes": {"x": "timestamp_at", "y": "value"},
-        },
-        "total_eth_volume": {
-            "type": "linear",
-            "title": "Volumen de ventas (ETH)",
+            "title": "Numero de ventas",
             "axes": {"x": "timestamp_at", "y": "value"},
         },
         "collection_top_assets_by_transfers": {
@@ -106,15 +102,22 @@ class CollectionMetricsConfig:
             "title": "Top Assets por volumen de transferencias",
             "axes": {"x": "timestamp_at", "y": "value", "hue": "asset_name"},
         },
+        "collection_top_assets_by_usd_volume": {
+            "type": "multilinear",
+            "title": "Top Assets por volumen de ventas (USD)",
+            "axes": {"x": "timestamp_at", "y": "value", "hue": "asset_name"},
+        },
         "collection_total_usd_volume": {
             "type": "linear",
             "title": "Volumen de ventas (USD)",
             "axes": {"x": "timestamp_at", "y": "value"},
+            "value_prefix": "$",
         },
-        "floor_assets_usd_price": {
+        "collection_floor_assets_usd_price": {
             "type": "linear",
             "title": "Precio suelo de los activos (USD)",
             "axes": {"x": "timestamp_at", "y": "value"},
+            "value_prefix": "$",
         },
     }
 

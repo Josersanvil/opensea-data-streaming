@@ -32,14 +32,16 @@ COLLECTIONS_EVENTS_COLS = [
     "image_url",
 ]
 BATCH_OPTIONS = {
+    "all time",
     "14 days",
     "7 days",
     "1 day",
     "12 hours",
     "1 hour",
-    "5 minutes",
 }
 STREAM_OPTIONS = {
+    "30 minutes",
+    "5 minutes",
     "1 minute",
     "30 seconds",
 }
@@ -56,14 +58,14 @@ def get_argparser() -> argparse.ArgumentParser:
         description="OpenSea Monitoring CLI",
     )
     parser.add_argument(
-        "type",
+        "events_type",
         type=str,
         help="The type of events to process.",
         choices=["global", "collections"],
     )
     parser.add_argument(
         "time_window",
-        type=str,
+        type=lambda s: str(s.lower()),
         help="The time window in which to group the events.",
         choices=BATCH_OPTIONS.union(STREAM_OPTIONS),
     )
@@ -137,6 +139,11 @@ def get_argparser() -> argparse.ArgumentParser:
         type=str,
         help="The checkpoint directory for the streaming query.",
     )
+    parser.add_argument(
+        "--start-from-beginning",
+        action="store_true",
+        help="Start processing from the beginning of the Kafka topic (only for stream)",
+    )
     return parser
 
 
@@ -169,12 +176,14 @@ def _get_raw_events_stream(
         )
     logger = get_logger("get_raw_events_stream")
     logger.debug(f"Reading raw events from Kafka topic '{args.raw_events_kafka_topic}'")
-    raw_events = (
+    stream_reader = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", args.kafka_brokers)
         .option("subscribe", args.raw_events_kafka_topic)
-        .load()
-    ).select(
+    )
+    if args.start_from_beginning:
+        stream_reader = stream_reader.option("startingOffsets", "earliest")
+    raw_events = stream_reader.load().select(
         F.get_json_object(F.col("value").cast("string"), "$.event").alias("event"),
         F.get_json_object(F.col("value").cast("string"), "$.payload").alias("payload"),
         F.get_json_object(F.col("value").cast("string"), "$.topic").alias("topic"),
@@ -196,28 +205,38 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
             F.col("sent_at") <= F.lit(args.timestamp_end)
         )
     clean_events.cache()
-    # Global metrics:
-    transactions_events = global_processors.get_transactions_events(
-        clean_events, args.time_window
-    )
-    marketplace_sales = global_processors.get_sales_volume_events(
-        clean_events, args.time_window
-    )
-    top_collections_sales = global_processors.get_top_collections_by_volume_events(
-        clean_events, args.time_window
-    )
-    top_collections_transactions = (
-        global_processors.get_top_collections_by_transactions_volume_events(
+    # Get global metrics:
+    if args.time_window == "all time":
+        logger.info("Getting all time metrics.")
+        all_time_metrics = global_processors.get_all_time_metrics(clean_events)
+        all_time_top_collections = global_processors.get_all_time_top_collections(
+            clean_events
+        )
+        global_events = all_time_metrics[GLOBAL_EVENTS_COLS].union(
+            all_time_top_collections[GLOBAL_EVENTS_COLS]
+        )
+    else:
+        transactions_events = global_processors.get_transactions_events(
             clean_events, args.time_window
         )
-    )
-    # Concatenate the events:
-    global_events = (
-        transactions_events[GLOBAL_EVENTS_COLS]
-        .union(marketplace_sales[GLOBAL_EVENTS_COLS])
-        .union(top_collections_sales[GLOBAL_EVENTS_COLS])
-        .union(top_collections_transactions[GLOBAL_EVENTS_COLS])
-    )
+        marketplace_sales = global_processors.get_sales_volume_events(
+            clean_events, args.time_window
+        )
+        top_collections_sales = global_processors.get_top_collections_by_sales_volume(
+            clean_events, args.time_window
+        )
+        top_collections_transactions = (
+            global_processors.get_top_collections_by_transactions_volume(
+                clean_events, args.time_window
+            )
+        )
+        # Concatenate the events:
+        global_events = (
+            transactions_events[GLOBAL_EVENTS_COLS]
+            .union(marketplace_sales[GLOBAL_EVENTS_COLS])
+            .union(top_collections_sales[GLOBAL_EVENTS_COLS])
+            .union(top_collections_transactions[GLOBAL_EVENTS_COLS])
+        )
     events_cnt = global_events.count()
     logger.info(f"Processed {events_cnt} events.")
     if args.kafka_topic:
@@ -252,6 +271,7 @@ def process_global_metrics_stream(args: argparse.Namespace) -> None:
         args.checkpoint_dir,
         debug=args.debug_mode,
         logger=logger,
+        add_run_suffix_to_checkpoint=True,
     )
     # Start the structured streaming query:
     global_events_query = global_events_stream.start()
@@ -272,32 +292,46 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
         clean_events = clean_events.filter(
             F.col("sent_at") <= F.lit(args.timestamp_end)
         )
-    collections_assets_events = (
-        collections_processors.get_top_collections_assets_by_sales(
+    # Get global metrics:
+    if args.time_window == "all time":
+        logger.info("Getting all time metrics.")
+        collections_all_time_metrics = collections_processors.get_all_time_metrics(
+            clean_events
+        )
+        collections_all_time_top_assets = (
+            collections_processors.get_all_time_top_collections_assets(
+                clean_events, n=50
+            )
+        )
+        collections_events = collections_all_time_metrics[
+            COLLECTIONS_EVENTS_COLS
+        ].union(collections_all_time_top_assets[COLLECTIONS_EVENTS_COLS])
+    else:
+        collections_assets_events = (
+            collections_processors.get_top_collections_assets_by_sales(
+                clean_events, args.time_window
+            )
+        )
+        collections_assets_by_transfers_events = (
+            collections_processors.get_collections_assets_transfers_stats(
+                clean_events, args.time_window
+            )
+        )
+        collection_sales_events = collections_processors.get_collection_sales_events(
             clean_events, args.time_window
         )
-    )
-    collections_assets_by_transfers_events = (
-        collections_processors.get_top_collections_assets_by_transfers(
-            clean_events, args.time_window
+        collection_transactions_events = (
+            collections_processors.get_collection_transactions_events(
+                clean_events, args.time_window
+            )
         )
-    )
-    collection_sales_events = collections_processors.get_collection_sales_events(
-        clean_events, args.time_window
-    )
-    collection_transactions_events = (
-        collections_processors.get_collection_transactions_events(
-            clean_events, args.time_window
+        # Concatenate the events:
+        collections_events = (
+            collections_assets_events[COLLECTIONS_EVENTS_COLS]
+            .union(collections_assets_by_transfers_events[COLLECTIONS_EVENTS_COLS])
+            .union(collection_sales_events[COLLECTIONS_EVENTS_COLS])
+            .union(collection_transactions_events[COLLECTIONS_EVENTS_COLS])
         )
-    )
-
-    # Concatenate the events:
-    collections_events = (
-        collections_assets_events[COLLECTIONS_EVENTS_COLS]
-        .union(collections_assets_by_transfers_events[COLLECTIONS_EVENTS_COLS])
-        .union(collection_sales_events[COLLECTIONS_EVENTS_COLS])
-        .union(collection_transactions_events[COLLECTIONS_EVENTS_COLS])
-    )
     events_cnt = collections_events.count()
     logger.info(f"Processed {events_cnt} events.")
     # Export the metrics to Kafka:
@@ -332,9 +366,19 @@ def process_collections_metrics_stream(args: argparse.Namespace) -> None:
             args.watermark_duration,
         )
     )
+    collections_assets_events = (
+        collections_processors.get_collections_assets_transfers_stats(
+            clean_events,
+            args.time_window,
+            args.slide_duration,
+            args.watermark_duration,
+        )
+    )
     # Concatenate the events:
-    collections_events = collection_sales_events[COLLECTIONS_EVENTS_COLS].union(
-        collection_transactions_events[COLLECTIONS_EVENTS_COLS]
+    collections_events = (
+        collection_sales_events[COLLECTIONS_EVENTS_COLS]
+        .union(collection_transactions_events[COLLECTIONS_EVENTS_COLS])
+        .union(collections_assets_events[COLLECTIONS_EVENTS_COLS])
     )
     collections_events_stream = get_kafka_stream_writer(
         collections_events,
@@ -343,6 +387,7 @@ def process_collections_metrics_stream(args: argparse.Namespace) -> None:
         args.checkpoint_dir,
         debug=args.debug_mode,
         logger=logger,
+        add_run_suffix_to_checkpoint=True,
     )
     collections_events_query = collections_events_stream.start()
     # Start the structured streaming query:
@@ -357,7 +402,7 @@ def main() -> None:
     logger = get_logger()
     logger.setLevel(args.log_level)
     time_start = time.time()
-    if args.type == "global":
+    if args.events_type == "global":
         if args.time_window in BATCH_OPTIONS:
             logger.info("Processing global metrics in batch mode.")
             process_global_metrics_batch(args)
@@ -371,7 +416,7 @@ def main() -> None:
                 )
         else:
             raise ValueError("Invalid time window for global metrics.")
-    elif args.type == "collections":
+    elif args.events_type == "collections":
         if args.time_window in BATCH_OPTIONS:
             logger.info("Processing collections metrics in batch mode.")
             process_collections_metrics_batch(args)

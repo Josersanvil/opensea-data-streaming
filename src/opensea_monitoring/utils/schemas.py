@@ -11,16 +11,14 @@ def get_opensea_raw_events_schema() -> T.StructType:
                 T.StructType(
                     [
                         T.StructField("event_type", T.StringType(), True),
-                        T.StructField("sent_at", T.TimestampType(), True),
+                        T.StructField("sent_at", T.StringType(), True),
                         T.StructField("status", T.StringType(), True),
                         T.StructField(
                             "payload",
                             T.StructType(
                                 [
-                                    T.StructField("quantity", T.IntegerType(), True),
-                                    T.StructField(
-                                        "listing_date", T.TimestampType(), True
-                                    ),
+                                    T.StructField("quantity", T.LongType(), True),
+                                    T.StructField("listing_date", T.StringType(), True),
                                     T.StructField("listing_type", T.StringType(), True),
                                     T.StructField(
                                         "collection",
@@ -108,10 +106,10 @@ def get_opensea_raw_events_schema() -> T.StructType:
                                                     "symbol", T.StringType(), True
                                                 ),
                                                 T.StructField(
-                                                    "eth_price", T.DoubleType(), True
+                                                    "eth_price", T.StringType(), True
                                                 ),
                                                 T.StructField(
-                                                    "usd_price", T.DoubleType(), True
+                                                    "usd_price", T.StringType(), True
                                                 ),
                                             ]
                                         ),

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
 import pyspark.sql.functions as F
@@ -16,6 +17,7 @@ def get_kafka_stream_writer(
     debug: bool = False,
     key_column: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
+    add_run_suffix_to_checkpoint: bool = False,
 ) -> "DataStreamWriter":
     """
     Returns a DataStreamWriter object to write a
@@ -31,6 +33,10 @@ def get_kafka_stream_writer(
         The value column is a column with the JSON representation
         of the rest of the columns.
     @param logger: The logger to use. If None, a new logger will be created.
+    @param add_run_suffix_to_checkpoint: If True, the name of the target
+        Kafka topic name and the current timestamp
+        will be added to the checkpoint location to avoid conflicts
+        when running multiple streaming queries.
     @return: The DataStreamWriter object.
     """
     if logger is None:
@@ -57,18 +63,26 @@ def get_kafka_stream_writer(
             .outputMode("complete")
             .option("truncate", "false")
         )
-    else:
-        logger.info(
-            f"Writing streaming data to Kafka topic '{topic}' "
-            f"at servers '{kafka_brokers}'"
-        )
-        stream_writer = (
-            stream_df.writeStream.format("kafka")
-            .option("kafka.bootstrap.servers", kafka_brokers)
-            .option("topic", topic)
-            .option("checkpointLocation", checkpoint_location)
-            .outputMode("update")
-        )
+        return stream_writer
+    if add_run_suffix_to_checkpoint:
+        ts = datetime.now(timezone.utc)
+        ts_str = ts.strftime("%Y-%m-%dT%H-%M-%S")
+        checkpoint_location = f"{checkpoint_location.rstrip('/')}/{topic}/{ts_str}"
+    logger.info(
+        f"Writing streaming data to Kafka topic '{topic}' "
+        f"at servers '{kafka_brokers}'"
+    )
+    logger.info(
+        "Checkpoint location for the streaming query "
+        f"is set to '{checkpoint_location}'"
+    )
+    stream_writer = (
+        stream_df.writeStream.format("kafka")
+        .option("kafka.bootstrap.servers", kafka_brokers)
+        .option("topic", topic)
+        .option("checkpointLocation", checkpoint_location)
+        .outputMode("update")
+    )
     return stream_writer
 
 
