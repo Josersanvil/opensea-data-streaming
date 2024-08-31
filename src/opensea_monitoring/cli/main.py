@@ -300,7 +300,7 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
         )
         collections_all_time_top_assets = (
             collections_processors.get_all_time_top_collections_assets(
-                clean_events, n=50
+                clean_events, n_per_collection=50
             )
         )
         collections_events = collections_all_time_metrics[

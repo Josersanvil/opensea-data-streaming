@@ -71,7 +71,7 @@ def get_all_time_metrics(
 
 def get_all_time_top_collections_assets(
     clean_events: "DataFrame",
-    n: int = 10,
+    n_per_collection: int = 20,
 ) -> "DataFrame":
     """
     Extracts the top collections assets of all time
@@ -96,15 +96,25 @@ def get_all_time_top_collections_assets(
             F.sum("usd_price").alias("usd_volume"),
         )
         .sort(F.desc("usd_volume"))
-        .limit(n)
-    ).select(
-        F.lit("collection_top_assets_by_usd_volume__all_time").alias("metric"),
-        F.col("collection_slug").alias("collection"),
-        F.current_timestamp().alias("timestamp"),
-        F.col("usd_volume").alias("value"),
-        F.coalesce("item_name", "item_nft_id").alias("asset_name"),
-        F.col("item_url").alias("asset_url"),
-        "image_url",
+    )
+    top_collections_assets_by_usd_volume_ranked = (
+        top_collections_assets_by_usd_volume.withColumn(
+            "rank_by_volume",
+            F.row_number().over(
+                Window.partitionBy("collection_slug").orderBy(F.desc("usd_volume"))
+            ),
+        ).filter(F.col("rank_by_volume") <= n_per_collection)
+    )
+    top_collections_assets_by_usd_volume_events = (
+        top_collections_assets_by_usd_volume_ranked.select(
+            F.lit("collection_top_assets_by_usd_volume__all_time").alias("metric"),
+            F.col("collection_slug").alias("collection"),
+            F.current_timestamp().alias("timestamp"),
+            F.col("usd_volume").alias("value"),
+            F.coalesce("item_name", "item_nft_id").alias("asset_name"),
+            F.col("item_url").alias("asset_url"),
+            "image_url",
+        )
     )
     top_collections_assets_by_transfers_count = (
         transferred_items.groupby(
@@ -118,18 +128,28 @@ def get_all_time_top_collections_assets(
             F.count("*").alias("transfers_count"),
         )
         .sort(F.desc("transfers_count"))
-        .limit(n)
-    ).select(
-        F.lit("collection_top_assets_by_transfers__all_time").alias("metric"),
-        F.col("collection_slug").alias("collection"),
-        F.current_timestamp().alias("timestamp"),
-        F.col("transfers_count").alias("value"),
-        F.coalesce("item_name", "item_nft_id").alias("asset_name"),
-        F.col("item_url").alias("asset_url"),
-        "image_url",
     )
-    top_collections_assets_events = top_collections_assets_by_usd_volume.union(
-        top_collections_assets_by_transfers_count
+    top_collections_assets_by_transfers_count_ranked = (
+        top_collections_assets_by_transfers_count.withColumn(
+            "rank_by_transfers",
+            F.row_number().over(
+                Window.partitionBy("collection_slug").orderBy(F.desc("transfers_count"))
+            ),
+        ).filter(F.col("rank_by_transfers") <= n_per_collection)
+    )
+    top_collections_assets_by_transfers_count_events = (
+        top_collections_assets_by_transfers_count_ranked.select(
+            F.lit("collection_top_assets_by_transfers__all_time").alias("metric"),
+            F.col("collection_slug").alias("collection"),
+            F.current_timestamp().alias("timestamp"),
+            F.col("transfers_count").alias("value"),
+            F.coalesce("item_name", "item_nft_id").alias("asset_name"),
+            F.col("item_url").alias("asset_url"),
+            "image_url",
+        )
+    )
+    top_collections_assets_events = top_collections_assets_by_usd_volume_events.union(
+        top_collections_assets_by_transfers_count_events
     )
     return top_collections_assets_events
 
