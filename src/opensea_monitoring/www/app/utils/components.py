@@ -120,9 +120,12 @@ def linear_plot(
     metric_config = config.plots_config[metric]
     df = pl.DataFrame(data, schema=config.df_schema)
     fig = px.line(
-        df.to_pandas(), x=metric_config["axes"]["x"], y=metric_config["axes"]["y"]
+        df.to_pandas(),
+        x=metric_config["axes"]["x"],
+        y=metric_config["axes"]["y"],
+        markers=True,
     )
-    fig.update_layout(title=f"{metric_config['title']} ({grain})")
+    fig.update_layout(title=metric_config["title"])
     fig.update_xaxes(title_text="Timestamp")
     st.plotly_chart(fig)
 
@@ -149,7 +152,7 @@ def multilinear_plot(
         color=metric_config["axes"]["hue"],
     )
     fig.update_layout(
-        title=f"{metric_config['title']} ({grain})",
+        title=metric_config["title"],
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
     )
     fig.update_xaxes(title_text="Timestamp")
@@ -267,7 +270,7 @@ def refresh_rate_options(
     )
 
 
-@st.fragment(run_every=60)
+@st.fragment(run_every=300)
 def show_topbar_metrics(
     metrics: list[str], grain: str, collection: Optional[str] = None
 ):

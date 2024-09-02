@@ -23,14 +23,22 @@ def get_all_time_metrics(
     """
     transferred_items = get_transferred_items(clean_events)
     sales_items = get_sales_items(clean_events)
-    all_time_metrics = transferred_items.agg(
-        F.count("*").alias("total_transfers"),
-        F.sum("quantity").alias("total_items_transferred"),
-    ).crossJoin(
-        sales_items.agg(
-            F.count("*").alias("total_sales"),
-            F.sum(F.coalesce("eth_price", F.lit(0))).alias("total_eth_volume"),
-            F.sum(F.coalesce("usd_price", F.lit(0))).alias("total_usd_volume"),
+    all_time_metrics = (
+        transferred_items.agg(
+            F.count("*").alias("total_transfers"),
+            F.sum("quantity").alias("total_items_transferred"),
+        )
+        .crossJoin(
+            sales_items.agg(
+                F.count("*").alias("total_sales"),
+                F.sum(F.coalesce("eth_price", F.lit(0))).alias("total_eth_volume"),
+                F.sum(F.coalesce("usd_price", F.lit(0))).alias("total_usd_volume"),
+            )
+        )
+        .crossJoin(
+            clean_events.agg(
+                F.count("*").alias("total_number_of_events"),
+            )
         )
     )
     all_time_metrics_events = all_time_metrics.unpivot(
@@ -41,6 +49,7 @@ def get_all_time_metrics(
             "total_sales",
             "total_eth_volume",
             "total_usd_volume",
+            "total_number_of_events",
         ],
         "metric",
         "value",
@@ -103,98 +112,77 @@ def get_all_time_top_collections(
     return top_collections_events
 
 
-def get_transactions_events(
+def get_global_metrics(
     clean_events: "DataFrame",
     window_duration: str,
     slide_duration: Optional[str] = None,
     watermark_duration: Optional[str] = None,
 ) -> "DataFrame":
     """
-    Extracts the transactions events from a cleaned events DataFrame,
-    by grouping the transferred items by in the specified time frame.
+    Extracts the transactions and sales metrics over time
+    from a cleaned DataFrame of OpenSea events
+    by grouping the events in the specified time frame.
 
     @param clean_events: The cleaned events DataFrame.
     @return: A DataFrame with the transactions events.
     """
-    transferred_items = get_transferred_items(clean_events)
     time_frame_txt = "_".join(window_duration.split())
     time_window = F.window("sent_at", window_duration, slide_duration)
     if watermark_duration:
-        transferred_items = transferred_items.withWatermark(
-            "sent_at", watermark_duration
-        )
-    windowed_transactions = (
-        transferred_items.groupBy(time_window)
+        clean_events = clean_events.withWatermark("sent_at", watermark_duration)
+    when_transferred_filter = lambda col, otherwise=None: F.when(
+        F.col("event_type") == "item_transferred", col
+    ).otherwise(otherwise)
+    when_sale_filter = lambda col, otherwise=None: F.when(
+        F.col("event_type").isin(["item_sold", "item_listed"]), col
+    ).otherwise(otherwise)
+    zero_if_null = lambda col: F.coalesce(col, F.lit(0))
+    windowed_metrics = (
+        clean_events.groupBy(time_window)
         .agg(
-            F.count("*").alias("total_transfers"),
-            F.sum("quantity").alias("total_items_transferred"),
+            F.count("*").alias("total_number_of_events"),
+            F.count(when_transferred_filter("sent_at")).alias("total_transfers"),
+            F.sum(when_transferred_filter(F.coalesce("quantity", F.lit(0)))).alias(
+                "total_items_transferred"
+            ),
+            F.count(when_sale_filter("sent_at")).alias("total_sales"),
+            F.sum(zero_if_null(when_sale_filter("eth_price"))).alias(
+                "total_eth_volume"
+            ),
+            F.sum(zero_if_null(when_sale_filter("usd_price"))).alias(
+                "total_usd_volume"
+            ),
         )
         .select(
             F.col("window.start").alias("window_start"),
             F.col("window.end").alias("window_end"),
+            "total_number_of_events",
             "total_transfers",
             "total_items_transferred",
-        )
-    )
-    windowed_transactions_events = windowed_transactions.unpivot(
-        ["window_start", "window_end"],
-        ["total_transfers", "total_items_transferred"],
-        "metric",
-        "value",
-    ).select(
-        F.concat("metric", F.lit(f"__{time_frame_txt}")).alias("metric"),
-        F.col("window_end").alias("timestamp"),
-        "value",
-        F.lit("").alias("collection"),
-    )
-    return windowed_transactions_events
-
-
-def get_sales_volume_events(
-    clean_events: "DataFrame",
-    window_duration: str,
-    slide_duration: Optional[str] = None,
-    watermark_duration: Optional[str] = None,
-) -> "DataFrame":
-    """
-    Extracts the sales volume over time from a cleaned events DataFrame,
-    by grouping the transferred items by in the specified time frame.
-
-    @param clean_events: The cleaned events DataFrame.
-    @return: A DataFrame with the sales volume over time.
-    """
-    sales_items = get_sales_items(clean_events)
-    time_frame_txt = "_".join(window_duration.split())
-    time_window = F.window("sent_at", window_duration, slide_duration)
-    if watermark_duration:
-        sales_items = sales_items.withWatermark("sent_at", watermark_duration)
-    windowed_sales = (
-        sales_items.groupBy(time_window)
-        .agg(
-            F.count("*").alias("total_sales"),
-            F.sum("eth_price").alias("total_eth_volume"),
-            F.sum("usd_price").alias("total_usd_volume"),
-        )
-        .select(
-            F.col("window.start").alias("window_start"),
-            F.col("window.end").alias("window_end"),
             "total_sales",
             "total_eth_volume",
             "total_usd_volume",
         )
     )
-    windowed_sales_events = windowed_sales.unpivot(
+    windowed_global_events = windowed_metrics.unpivot(
         ["window_start", "window_end"],
-        ["total_sales", "total_eth_volume", "total_usd_volume"],
+        [
+            "total_number_of_events",
+            "total_transfers",
+            "total_items_transferred",
+            "total_sales",
+            "total_eth_volume",
+            "total_usd_volume",
+        ],
         "metric",
         "value",
     ).select(
         F.concat("metric", F.lit(f"__{time_frame_txt}")).alias("metric"),
         F.col("window_end").alias("timestamp"),
-        "value",
+        F.coalesce("value", F.lit(0)).alias("value"),
         F.lit("").alias("collection"),
     )
-    return windowed_sales_events
+    return windowed_global_events
 
 
 def get_top_collections_by_sales_volume(

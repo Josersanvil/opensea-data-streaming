@@ -95,6 +95,13 @@ def get_clean_events(
             is_json_payload=is_json_payload,
         ),
     ).filter(F.col("event") != "phx_reply")
+    # Ensure that the quantity is always positive
+    df_events = df_events.withColumn(
+        "quantity",
+        F.when(
+            F.col("quantity").cast("int") > 0, F.col("quantity").cast("int")
+        ).otherwise(1),
+    )
     return df_events
 
 
@@ -129,13 +136,6 @@ def get_transferred_items(clean_events: "DataFrame") -> "DataFrame":
     @return: A DataFrame with the transferred items.
     """
     transferred_items = clean_events.filter(F.col("event_type") == "item_transferred")
-    # Ensure quantity is a positive integer
-    transferred_items = transferred_items.withColumn(
-        "quantity",
-        F.when(
-            F.col("quantity").cast("int") > 0, F.col("quantity").cast("int")
-        ).otherwise(0),
-    )
     return transferred_items
 
 

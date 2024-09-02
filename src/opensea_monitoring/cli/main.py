@@ -216,10 +216,7 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
             all_time_top_collections[GLOBAL_EVENTS_COLS]
         )
     else:
-        transactions_events = global_processors.get_transactions_events(
-            clean_events, args.time_window
-        )
-        marketplace_sales = global_processors.get_sales_volume_events(
+        global_metrics = global_processors.get_global_metrics(
             clean_events, args.time_window
         )
         top_collections_sales = global_processors.get_top_collections_by_sales_volume(
@@ -232,8 +229,7 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
         )
         # Concatenate the events:
         global_events = (
-            transactions_events[GLOBAL_EVENTS_COLS]
-            .union(marketplace_sales[GLOBAL_EVENTS_COLS])
+            global_metrics[GLOBAL_EVENTS_COLS]
             .union(top_collections_sales[GLOBAL_EVENTS_COLS])
             .union(top_collections_transactions[GLOBAL_EVENTS_COLS])
         )
@@ -254,15 +250,8 @@ def process_global_metrics_stream(args: argparse.Namespace) -> None:
     spark = get_spark_session(logger.name)
     raw_events = _get_raw_events_stream(spark, args)
     clean_events = get_clean_events(raw_events, is_json_payload=True)
-    # Global events
-    transactions_events = global_processors.get_transactions_events(
+    global_events = global_processors.get_global_metrics(
         clean_events, args.time_window, args.slide_duration, args.watermark_duration
-    )
-    sold_items_events = global_processors.get_sales_volume_events(
-        clean_events, args.time_window, args.slide_duration, args.watermark_duration
-    )
-    global_events = transactions_events[GLOBAL_EVENTS_COLS].union(
-        sold_items_events[GLOBAL_EVENTS_COLS]
     )
     global_events_stream = get_kafka_stream_writer(
         global_events,

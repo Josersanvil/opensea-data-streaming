@@ -5,9 +5,6 @@ class AppConfig:
 
     grain_options = {
         "options": {
-            "30 segundos": {
-                "grain_value": "30 seconds",
-            },
             "1 minuto": {
                 "grain_value": "1 minute",
             },
@@ -19,17 +16,21 @@ class AppConfig:
     }
     refresh_rate_options = {
         "options": {
-            "5 segundos": {"value_secs": 5},
             "30 segundos": {"value_secs": 30},
             "1 minuto": {"value_secs": 60},
         },
-        "default_value": "5 segundos",
+        "default_value": "1 minuto",
     }
 
 
 class GlobalMetricsConfig:
 
     plots_config = {
+        "total_number_of_events": {
+            "type": "linear",
+            "title": "Numero de eventos entrantes",
+            "axes": {"x": "timestamp_at", "y": "value"},
+        },
         "total_transfers": {
             "type": "linear",
             "title": "Numero de transferencias",

@@ -81,7 +81,6 @@ def get_kafka_stream_writer(
         .option("kafka.bootstrap.servers", kafka_brokers)
         .option("topic", topic)
         .option("checkpointLocation", checkpoint_location)
-        .outputMode("update")
     )
     return stream_writer
 
