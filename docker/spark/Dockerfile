@@ -16,8 +16,6 @@ RUN pip install jupyterlab py4j
 # Copy spark-defaults.conf
 COPY ./spark-conf/spark-defaults.conf /opt/bitnami/spark/conf/spark-defaults.conf
 
-# Install the spakr dependencies (# TODO)
-
 WORKDIR /app
 
 # Install application dependencies
@@ -25,6 +23,6 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install -r /app/requirements.txt
 # Install the application
 COPY . /app
-RUN pip install -e .
+RUN pip install -e ".[ingestion]"
 
 # ENTRYPOINT ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root"]
