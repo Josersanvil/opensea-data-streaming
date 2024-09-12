@@ -33,6 +33,7 @@ services:
       - .env
     profiles:
       - all
+      - stream
     command:
       - --kafka-topic=OpenSeaRawEvents
       - --kafka-broker=kafka:19092
@@ -99,7 +100,13 @@ services:
       - ./spark-conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
       - ./src:/app/src
     healthcheck:
-      test: [ "CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8080').read()" ]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from urllib.request import urlopen; urlopen('http://localhost:8080').read()"
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -152,7 +159,10 @@ services:
     depends_on:
       - minio
     entrypoint: [ "/bin/sh", "-c" ]
-    command: [ "mc alias set minio http://minio:9000 minio minio123 && mc mb minio/processed-data && mc mb minio/raw-data" ]
+    command:
+      [
+        "mc alias set minio http://minio:9000 minio minio123 && mc mb minio/processed-data && mc mb minio/raw-data"
+      ]
 
   # === Apache Cassandra ===
   cassandra:
@@ -170,7 +180,17 @@ services:
       - CASSANDRA_PASSWORD_SEEDER=yes
       - CASSANDRA_PASSWORD=cassandra
     healthcheck:
-      test: [ "CMD", "cqlsh", "cassandra", "-u", "cassandra", "-p", "cassandra", "-e describe keyspaces" ]
+      test:
+        [
+          "CMD",
+          "cqlsh",
+          "cassandra",
+          "-u",
+          "cassandra",
+          "-p",
+          "cassandra",
+          "-e describe keyspaces"
+        ]
       start_period: 12s
       interval: 10s
       timeout: 5s
@@ -330,7 +350,12 @@ services:
         condition: service_started
     volumes:
       - ./docker/kafka-connect/connectors/minio-s3-sink.json:/etc/kafka-connect/minio-s3-sink.json
-    entrypoint: [ "/bin/sh", "-c", "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/minio-s3-sink.json kafka-connect:8083/connectors" ]
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/minio-s3-sink.json kafka-connect:8083/connectors"
+      ]
 
   create-kafka-cassandra-global-metrics-connector:
     image: confluentinc/cp-kafka-connect:7.3.2
@@ -343,7 +368,12 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./docker/kafka-connect/connectors/:/etc/kafka-connect/connectors/
-    entrypoint: [ "/bin/sh", "-c", "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/connectors/cassandra-global-metrics-sink.json kafka-connect:8083/connectors" ]
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/connectors/cassandra-global-metrics-sink.json kafka-connect:8083/connectors"
+      ]
 
   create-kafka-cassandra-collection-metrics-connector:
     image: confluentinc/cp-kafka-connect:7.3.2
@@ -356,7 +386,12 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./docker/kafka-connect/connectors/:/etc/kafka-connect/connectors/
-    entrypoint: [ "/bin/sh", "-c", "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/connectors/cassandra-collection-metrics-sink.json kafka-connect:8083/connectors" ]
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "curl -X POST -H 'Content-Type: application/json' --data @/etc/kafka-connect/connectors/cassandra-collection-metrics-sink.json kafka-connect:8083/connectors"
+      ]
 
   ksqldb-server:
     image: confluentinc/cp-ksqldb-server:7.3.2
