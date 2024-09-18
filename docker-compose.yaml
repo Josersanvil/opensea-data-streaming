@@ -40,7 +40,7 @@ services:
       - --kafka-client-id=opensea-spark-streaming
       - -l=INFO
     depends_on:
-      - create-kafka-topic-raw-events
+      - create-kafka-topics
 
   # === Jupyter Notebook ===
   notebook:
@@ -161,7 +161,7 @@ services:
     entrypoint: [ "/bin/sh", "-c" ]
     command:
       [
-        "mc alias set minio http://minio:9000 minio minio123 && mc mb minio/processed-data && mc mb minio/raw-data"
+        "mc alias set minio http://minio:9000 minio minio123 && mc mb minio/stream-checkpoints && mc mb minio/raw-data"
       ]
 
   # === Apache Cassandra ===
@@ -408,7 +408,7 @@ services:
       - kafka
 
   # Create topics
-  create-kafka-topic-raw-events:
+  create-kafka-topics:
     image: confluentinc/cp-kafka:7.3.2
     depends_on:
       - kafka
@@ -417,29 +417,10 @@ services:
       - all
     entrypoint: [ "/bin/sh", "-c" ]
     command:
-      - "kafka-topics --create --topic OpenSeaRawEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
-
-  create-kafka-topic-enriched-events-global:
-    image: confluentinc/cp-kafka:7.3.2
-    depends_on:
-      - kafka
-    profiles:
-      - kafka
-      - all
-    entrypoint: [ "/bin/sh", "-c" ]
-    command:
-      - "kafka-topics --create --topic OpenSeaEnrichedGlobalEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
-
-  create-kafka-topic-enriched-events-collections:
-    image: confluentinc/cp-kafka:7.3.2
-    depends_on:
-      - kafka
-    profiles:
-      - kafka
-      - all
-    entrypoint: [ "/bin/sh", "-c" ]
-    command:
-      - "kafka-topics --create --topic OpenSeaEnrichedCollectionsEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092"
+      - |
+        kafka-topics --create --topic OpenSeaRawEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092
+        && kafka-topics --create --topic OpenSeaEnrichedGlobalEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092
+        && kafka-topics --create --topic OpenSeaEnrichedCollectionsEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092
 
   # === Conduktor (For Kafka) ===
   conduktor-db:

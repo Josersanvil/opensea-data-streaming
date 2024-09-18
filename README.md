@@ -205,7 +205,7 @@ docker compose --profile kafka exec -it \
     --kafka-topic OpenSeaEnrichedGlobalEvents \
     --slide-duration '1 minute' \
     --watermark-duration '3 minutes' \
-    --checkpoint-dir s3a://processed-data/checkpoints/topics/ \
+    --checkpoint-dir s3a://stream-checkpoints/topics/ \
     -l INFO
 ```
 
@@ -224,7 +224,7 @@ docker compose --profile kafka exec -it \
     --kafka-topic OpenSeaEnrichedCollectionsEvents \
     --slide-duration '1 minute' \
     --watermark-duration '3 minutes' \
-    --checkpoint-dir s3a://processed-data/checkpoints/topics/
+    --checkpoint-dir s3a://stream-checkpoints/topics/
 ```
 
 #### Process all time global events
@@ -272,6 +272,6 @@ docker compose --profile kafka exec -it \
     --kafka-brokers kafka:19092 \
     --kafka-topic OpenSeaEnrichedGlobalEvents \
     --slide-duration '1 minute' \
-    --checkpoint-dir s3a://processed-data/checkpoints/topics/
+    --checkpoint-dir s3a://stream-checkpoints/topics/
     --debug
 ```

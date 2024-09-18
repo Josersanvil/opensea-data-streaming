@@ -29,7 +29,7 @@ def get_argparser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "The file to write the messages to. Use '-' to write to stdout. "
-            "If not specified, one will be created in the outdir (if specified).",
+            "If not specified, one will be created in the outdir (if specified)."
         ),
     )
     parser.add_argument(
