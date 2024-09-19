@@ -204,6 +204,43 @@ docker compose --profile kafka exec -it \
     --checkpoint-dir s3a://stream-checkpoints/topics/
 ```
 
+#### Process all type of events at the same time
+
+You can process both global and collection events at the same time by using the `all` command.
+
+When you do this, you must specify the Kafka topics for the global and collection events.
+
+To process all events in stream mode:
+
+```bash
+docker compose --profile kafka exec -it \
+    -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 \
+    -e OPENSEA_MONITORING_LOG_LEVEL=INFO \
+    spark \
+    python -m opensea_monitoring.cli all '1 minute' \
+    --raw-events-kafka-topic OpenSeaRawEvents \
+    --kafka-brokers kafka:19092 \
+    --global-kafka-topic OpenSeaEnrichedGlobalEvents \
+    --collections-kafka-topic OpenSeaEnrichedCollectionsEvents \
+    --slide-duration '1 minute' \
+    --watermark-duration '3 minutes' \
+    --checkpoint-dir s3a://stream-checkpoints/topics/
+```
+
+To process all events in batch mode:
+
+```bash
+docker compose --profile spark --profile kafka \
+    exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
+    python -m opensea_monitoring.cli all '1 hour' \
+    --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
+    --raw-events-kafka-topic OpenSeaRawEvents \
+    --kafka-brokers kafka:19092 \
+    --global-kafka-topic OpenSeaEnrichedGlobalEvents \
+    --collections-kafka-topic OpenSeaEnrichedCollectionsEvents \
+    -l INFO
+```
+
 #### Process all time global events
 
 All time global events can be processed by setting the time window to `all time`. This is available for both global and collection events, however, it can only be used in batch mode.
@@ -231,6 +268,20 @@ docker compose --profile spark --profile kafka \
     --raw-events-kafka-topic OpenSeaRawEvents \
     --kafka-brokers kafka:19092 \
     --kafka-topic OpenSeaEnrichedCollectionsEvents \
+    -l INFO
+```
+
+For all events:
+
+```sh
+docker compose --profile spark --profile kafka \
+    exec -e OPENSEA_MONITORING_SPARK_MASTER=spark://spark:7077 -it spark \
+    python -m opensea_monitoring.cli all 'all time' \
+    --raw-events-s3-uri s3a://raw-data/topics/OpenSeaRawEvents \
+    --raw-events-kafka-topic OpenSeaRawEvents \
+    --kafka-brokers kafka:19092 \
+    --global-kafka-topic OpenSeaEnrichedGlobalEvents \
+    --collections-kafka-topic OpenSeaEnrichedCollectionsEvents \
     -l INFO
 ```
 

@@ -81,6 +81,16 @@ def get_argparser() -> argparse.ArgumentParser:
         help="The Kafka topic to write the processed events to.",
     )
     parser.add_argument(
+        "--global-kafka-topic",
+        type=str,
+        help="The Kafka topic for global metrics when processing all events.",
+    )
+    parser.add_argument(
+        "--collections-kafka-topic",
+        type=str,
+        help="The Kafka topic for collections metrics when processing all events.",
+    )
+    parser.add_argument(
         "--kafka-brokers",
         type=str,
         help="The Kafka brokers to connect to.",
@@ -165,14 +175,10 @@ def _get_raw_events_batch(
 def _get_raw_events_stream(
     spark: "SparkSession", args: argparse.Namespace
 ) -> "DataFrame":
-    if not (
-        args.raw_events_kafka_topic
-        and args.kafka_brokers
-        and args.kafka_topic
-        and args.checkpoint_dir
-    ):
+
+    if not (args.raw_events_kafka_topic and args.kafka_brokers and args.checkpoint_dir):
         raise ValueError(
-            "The raw events Kafka topic, Kafka brokers, Kafka topic, and checkpoint "
+            "The raw events Kafka topic, Kafka brokers, and checkpoint "
             "directory are required when processing data in stream"
         )
     logger = get_logger("get_raw_events_stream")
@@ -192,23 +198,12 @@ def _get_raw_events_stream(
     return raw_events
 
 
-def process_global_metrics_batch(args: argparse.Namespace) -> None:
-    logger = get_logger("process_global_metrics_batch")
-    spark = get_spark_session(logger.name)
-    raw_events = _get_raw_events_batch(spark, args)
-    clean_events = get_clean_events(raw_events)
-    if args.timestamp_start:
-        clean_events = clean_events.filter(
-            F.col("sent_at") >= F.lit(args.timestamp_start)
-        )
-    if args.timestamp_end:
-        clean_events = clean_events.filter(
-            F.col("sent_at") <= F.lit(args.timestamp_end)
-        )
-    clean_events.cache()
+def get_global_metrics(
+    clean_events: "DataFrame", args: argparse.Namespace, logger: logging.Logger = None
+) -> "DataFrame":
+    logger = logger or get_logger()
     # Get global metrics:
     if args.time_window == "all time":
-        logger.info("Getting all time metrics.")
         all_time_metrics = global_processors.get_all_time_metrics(clean_events)
         all_time_top_collections = global_processors.get_all_time_top_collections(
             clean_events
@@ -234,59 +229,13 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
             .union(top_collections_sales[GLOBAL_EVENTS_COLS])
             .union(top_collections_transactions[GLOBAL_EVENTS_COLS])
         )
-    events_cnt = global_events.count()
-    logger.info(f"Processed {events_cnt} events.")
-    if args.kafka_topic:
-        logger.info(f"Exporting the metrics to Kafka topic {args.kafka_topic}")
-        if not args.kafka_brokers:
-            raise ValueError(
-                "Kafka brokers are required when writing to a Kafka topic."
-            )
-            # Export the metrics to Kafka:
-        write_df_to_kafka_topic(global_events, args.kafka_topic, args.kafka_brokers)
+    return global_events
 
 
-def process_global_metrics_stream(
-    args: argparse.Namespace, wait: bool = False
-) -> None | StreamingQuery:
-    logger = get_logger("process_global_metrics_stream")
-    spark = get_spark_session(logger.name)
-    raw_events = _get_raw_events_stream(spark, args)
-    clean_events = get_clean_events(raw_events, is_json_payload=True)
-    global_events = global_processors.get_global_metrics(
-        clean_events, args.time_window, args.slide_duration, args.watermark_duration
-    )
-    global_events_stream = get_kafka_stream_writer(
-        global_events,
-        args.kafka_topic,
-        args.kafka_brokers,
-        args.checkpoint_dir,
-        debug=args.debug_mode,
-        logger=logger,
-        add_run_suffix_to_checkpoint=True,
-    )
-    # Start the structured streaming query:
-    global_events_query = global_events_stream.start()
-    logger.info(f"Started streaming query '{global_events_query.id}'")
-    if wait:
-        return global_events_query.awaitTermination()
-    return global_events_query
-
-
-def process_collections_metrics_batch(args: argparse.Namespace) -> None:
-    logger = get_logger("process_collections_metrics_batch")
-    spark = get_spark_session(logger.name)
-    raw_events = _get_raw_events_batch(spark, args)
-    clean_events = get_clean_events(raw_events)
-    if args.timestamp_start:
-        clean_events = clean_events.filter(
-            F.col("sent_at") >= F.lit(args.timestamp_start)
-        )
-    if args.timestamp_end:
-        clean_events = clean_events.filter(
-            F.col("sent_at") <= F.lit(args.timestamp_end)
-        )
-    # Get global metrics:
+def get_collections_metrics(
+    clean_events: "DataFrame", args: argparse.Namespace, logger: logging.Logger = None
+) -> "DataFrame":
+    logger = logger or get_logger()
     if args.time_window == "all time":
         logger.info("Getting all time metrics.")
         collections_all_time_metrics = collections_processors.get_all_time_metrics(
@@ -326,25 +275,134 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
             .union(collection_sales_events[COLLECTIONS_EVENTS_COLS])
             .union(collection_transactions_events[COLLECTIONS_EVENTS_COLS])
         )
+    return collections_events
+
+
+def process_global_metrics_batch(args: argparse.Namespace) -> None:
+    logger = get_logger("process_global_metrics_batch")
+    spark = get_spark_session(logger.name)
+    raw_events = _get_raw_events_batch(spark, args)
+    clean_events = get_clean_events(raw_events)
+    if args.timestamp_start:
+        clean_events = clean_events.filter(
+            F.col("sent_at") >= F.lit(args.timestamp_start)
+        )
+    if args.timestamp_end:
+        clean_events = clean_events.filter(
+            F.col("sent_at") <= F.lit(args.timestamp_end)
+        )
+    global_events = get_global_metrics(clean_events, args)
+    events_cnt = global_events.count()
+    logger.info(f"Processed {events_cnt} events.")
+    kafka_topic = args.kafka_topic or args.global_kafka_topic
+    if kafka_topic:
+        logger.info(f"Exporting the metrics to Kafka topic {kafka_topic}")
+        if not args.kafka_brokers:
+            raise ValueError(
+                "Kafka brokers are required when writing to a Kafka topic."
+            )
+            # Export the metrics to Kafka:
+        write_df_to_kafka_topic(global_events, kafka_topic, args.kafka_brokers)
+
+
+def process_global_metrics_stream(
+    args: argparse.Namespace, wait: bool = False
+) -> "None | StreamingQuery":
+    logger = get_logger("process_global_metrics_stream")
+    spark = get_spark_session(logger.name)
+    raw_events = _get_raw_events_stream(spark, args)
+    clean_events = get_clean_events(raw_events, is_json_payload=True)
+    global_events = global_processors.get_global_metrics(
+        clean_events, args.time_window, args.slide_duration, args.watermark_duration
+    )
+    kafka_topic = args.kafka_topic or args.global_kafka_topic
+    global_events_stream = get_kafka_stream_writer(
+        global_events,
+        kafka_topic,
+        args.kafka_brokers,
+        args.checkpoint_dir,
+        debug=args.debug_mode,
+        logger=logger,
+        add_run_suffix_to_checkpoint=True,
+    )
+    # Start the structured streaming query:
+    global_events_query = global_events_stream.start()
+    logger.info(f"Started streaming query '{global_events_query.id}'")
+    if wait:
+        return global_events_query.awaitTermination()
+    return global_events_query
+
+
+def process_collections_metrics_batch(args: argparse.Namespace) -> None:
+    logger = get_logger("process_collections_metrics_batch")
+    spark = get_spark_session(logger.name)
+    raw_events = _get_raw_events_batch(spark, args)
+    clean_events = get_clean_events(raw_events)
+    if args.timestamp_start:
+        clean_events = clean_events.filter(
+            F.col("sent_at") >= F.lit(args.timestamp_start)
+        )
+    if args.timestamp_end:
+        clean_events = clean_events.filter(
+            F.col("sent_at") <= F.lit(args.timestamp_end)
+        )
+    collections_events = get_collections_metrics(clean_events, args)
     events_cnt = collections_events.count()
     logger.info(f"Processed {events_cnt} events.")
     # Export the metrics to Kafka:
-    if args.kafka_topic:
-        logger.info(f"Exporting the metrics to Kafka topic {args.kafka_topic}")
+    kafka_topic = args.kafka_topic or args.collections_kafka_topic
+    if kafka_topic:
+        logger.info(f"Exporting the metrics to Kafka topic {kafka_topic}")
+        if not args.kafka_brokers:
+            raise ValueError(
+                "Kafka brokers are required when writing to a Kafka topic."
+            )
+            # Export the metrics to Kafka:
+        write_df_to_kafka_topic(collections_events, kafka_topic, args.kafka_brokers)
+
+
+def process_all_metrics_batch(args: argparse.Namespace) -> None:
+    """
+    Process all metrics in batch mode.
+    """
+    logger = get_logger("process_all_metrics_batch")
+    spark = get_spark_session(logger.name)
+    raw_events = _get_raw_events_batch(spark, args)
+    clean_events = get_clean_events(raw_events)
+    if args.timestamp_start:
+        clean_events = clean_events.filter(
+            F.col("sent_at") >= F.lit(args.timestamp_start)
+        )
+    if args.timestamp_end:
+        clean_events = clean_events.filter(
+            F.col("sent_at") <= F.lit(args.timestamp_end)
+        )
+    clean_events.cache()
+    global_events = get_global_metrics(clean_events, args)
+    global_events_cnt = global_events.count()
+    logger.info(f"Processed {global_events_cnt} global events.")
+    collections_events = get_collections_metrics(clean_events, args)
+    collections_events_cnt = collections_events.count()
+    logger.info(f"Processed {collections_events_cnt} collections events.")
+    # Export the metrics to Kafka:
+    if args.global_kafka_topic and args.collections_kafka_topic:
         if not args.kafka_brokers:
             raise ValueError(
                 "Kafka brokers are required when writing to a Kafka topic."
             )
         # Export the metrics to Kafka:
         write_df_to_kafka_topic(
-            collections_events, args.kafka_topic, args.kafka_brokers
+            global_events, args.global_kafka_topic, args.kafka_brokers
+        )
+        write_df_to_kafka_topic(
+            collections_events, args.collections_kafka_topic, args.kafka_brokers
         )
 
 
 def process_collections_metrics_stream(
     args: argparse.Namespace,
     wait: bool = False,
-) -> None | StreamingQuery:
+) -> "None | StreamingQuery":
 
     logger = get_logger("process_collections_metrics_stream")
     spark = get_spark_session(logger.name)
@@ -378,9 +436,10 @@ def process_collections_metrics_stream(
         .union(collection_transactions_events[COLLECTIONS_EVENTS_COLS])
         .union(collections_assets_events[COLLECTIONS_EVENTS_COLS])
     )
+    kafka_topic = args.kafka_topic or args.collections_kafka_topic
     collections_events_stream = get_kafka_stream_writer(
         collections_events,
-        args.kafka_topic,
+        kafka_topic,
         args.kafka_brokers,
         args.checkpoint_dir,
         debug=args.debug_mode,
@@ -433,8 +492,7 @@ def main() -> None:
     elif args.events_type == "all":
         if args.time_window in BATCH_OPTIONS:
             logger.info("Processing global and collections metrics in batch mode.")
-            process_global_metrics_batch(args)
-            process_collections_metrics_batch(args)
+            process_all_metrics_batch(args)
         elif args.time_window in STREAM_OPTIONS:
             logger.info("Processing global and collections metrics in stream mode.")
             global_query = process_global_metrics_stream(args)

@@ -41,6 +41,8 @@ def get_kafka_stream_writer(
     """
     if logger is None:
         logger = logging.getLogger(__name__)
+    if not topic:
+        raise ValueError("The Kafka topic must be specified")
     stream_df_cols = []
     if key_column:
         key_col = F.col(key_column).alias("key")
