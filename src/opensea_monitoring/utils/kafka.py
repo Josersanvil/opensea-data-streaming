@@ -60,7 +60,7 @@ def get_kafka_stream_writer(
         )
         stream_writer = (
             stream_df.writeStream.format("console")
-            .outputMode("append")
+            .outputMode("complete")
             .option("truncate", "false")
         )
         return stream_writer
@@ -80,6 +80,7 @@ def get_kafka_stream_writer(
         stream_df.writeStream.format("kafka")
         .option("kafka.bootstrap.servers", kafka_brokers)
         .option("topic", topic)
+        .outputMode("update")
         .option("checkpointLocation", checkpoint_location)
     )
     return stream_writer
