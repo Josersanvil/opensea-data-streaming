@@ -386,8 +386,8 @@ services:
     entrypoint: [ "/bin/sh", "-c" ]
     command:
       - |
-        kafka-topics --create --topic OpenSeaRawEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092
-        && kafka-topics --create --topic OpenSeaEnrichedGlobalEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092
+        kafka-topics --create --topic OpenSeaRawEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092 \
+        && kafka-topics --create --topic OpenSeaEnrichedGlobalEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092 \
         && kafka-topics --create --topic OpenSeaEnrichedCollectionsEvents --if-not-exists --partitions 1 --replication-factor 1 --bootstrap-server kafka:19092
 
   # === Conduktor (For Kafka) ===
