@@ -60,7 +60,7 @@ def get_kafka_stream_writer(
         )
         stream_writer = (
             stream_df.writeStream.format("console")
-            .outputMode("complete")
+            .outputMode("append")
             .option("truncate", "false")
         )
         return stream_writer

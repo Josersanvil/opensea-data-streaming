@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS global_metrics (
     value double,
     -- eg. 1000000, null
     collection text,
-    -- eg. null, "CoolMonkeyCollection"
+    -- eg. "", "CoolMonkeyCollection"
     PRIMARY KEY ((metric), collection, timestamp)
 ) WITH CLUSTERING
 ORDER BY (collection ASC, timestamp DESC);
