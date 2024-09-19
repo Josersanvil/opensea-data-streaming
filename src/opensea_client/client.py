@@ -83,7 +83,7 @@ class OpenSeaClient:
                 "ref": 0,
             }
             await socket.send(json.dumps(payload))
-            await asyncio.sleep(30)
+            await asyncio.sleep(20)
 
     async def handle_terminate(self, sig, socket: WebSocketClientProtocol):
         self.logger.warning(

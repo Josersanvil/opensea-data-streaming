@@ -20,6 +20,7 @@ from opensea_monitoring.utils.timestamp import parse_timestamp
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame, SparkSession
+    from pyspark.sql.streaming import StreamingQuery
 
 GLOBAL_EVENTS_COLS = ["metric", "timestamp", "value", "collection"]
 COLLECTIONS_EVENTS_COLS = [
@@ -61,7 +62,7 @@ def get_argparser() -> argparse.ArgumentParser:
         "events_type",
         type=str,
         help="The type of events to process.",
-        choices=["global", "collections"],
+        choices=["global", "collections", "all"],
     )
     parser.add_argument(
         "time_window",
@@ -245,7 +246,9 @@ def process_global_metrics_batch(args: argparse.Namespace) -> None:
         write_df_to_kafka_topic(global_events, args.kafka_topic, args.kafka_brokers)
 
 
-def process_global_metrics_stream(args: argparse.Namespace) -> None:
+def process_global_metrics_stream(
+    args: argparse.Namespace, wait: bool = False
+) -> None | StreamingQuery:
     logger = get_logger("process_global_metrics_stream")
     spark = get_spark_session(logger.name)
     raw_events = _get_raw_events_stream(spark, args)
@@ -265,7 +268,9 @@ def process_global_metrics_stream(args: argparse.Namespace) -> None:
     # Start the structured streaming query:
     global_events_query = global_events_stream.start()
     logger.info(f"Started streaming query '{global_events_query.id}'")
-    global_events_query.awaitTermination()
+    if wait:
+        return global_events_query.awaitTermination()
+    return global_events_query
 
 
 def process_collections_metrics_batch(args: argparse.Namespace) -> None:
@@ -336,7 +341,11 @@ def process_collections_metrics_batch(args: argparse.Namespace) -> None:
         )
 
 
-def process_collections_metrics_stream(args: argparse.Namespace) -> None:
+def process_collections_metrics_stream(
+    args: argparse.Namespace,
+    wait: bool = False,
+) -> None | StreamingQuery:
+
     logger = get_logger("process_collections_metrics_stream")
     spark = get_spark_session(logger.name)
     raw_events = _get_raw_events_stream(spark, args)
@@ -381,7 +390,9 @@ def process_collections_metrics_stream(args: argparse.Namespace) -> None:
     collections_events_query = collections_events_stream.start()
     # Start the structured streaming query:
     logger.info(f"Started streaming query '{collections_events_query.id}'")
-    collections_events_query.awaitTermination()
+    if wait:
+        return collections_events_query.awaitTermination()
+    return collections_events_query
 
 
 def main() -> None:
@@ -398,7 +409,7 @@ def main() -> None:
         elif args.time_window in STREAM_OPTIONS:
             logger.info("Processing global metrics in stream mode.")
             try:
-                process_global_metrics_stream(args)
+                process_global_metrics_stream(args, wait=True)
             except Py4JError:
                 logger.exception(
                     "The stream was terminated, check the logs for more info."
@@ -412,13 +423,26 @@ def main() -> None:
         elif args.time_window in STREAM_OPTIONS:
             logger.info("Processing collections metrics in stream mode.")
             try:
-                process_collections_metrics_stream(args)
+                process_collections_metrics_stream(args, wait=True)
             except Py4JError:
                 logger.exception(
                     "The stream was terminated, check the logs for more info."
                 )
         else:
             raise ValueError("Invalid time window for collections metrics.")
+    elif args.events_type == "all":
+        if args.time_window in BATCH_OPTIONS:
+            logger.info("Processing global and collections metrics in batch mode.")
+            process_global_metrics_batch(args)
+            process_collections_metrics_batch(args)
+        elif args.time_window in STREAM_OPTIONS:
+            logger.info("Processing global and collections metrics in stream mode.")
+            global_query = process_global_metrics_stream(args)
+            collections_query = process_collections_metrics_stream(args)
+            global_query.awaitTermination()
+            collections_query.awaitTermination()
+        else:
+            raise ValueError("Invalid time window for events.")
     else:
         raise ValueError("Invalid type of events to process.")
     time_end = time.time()

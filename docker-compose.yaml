@@ -114,7 +114,7 @@ services:
     depends_on:
       - spark
     deploy:
-      replicas: 2
+      replicas: 3
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark:7077

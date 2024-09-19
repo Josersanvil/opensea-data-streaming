@@ -50,6 +50,7 @@ These variables are used to configure the application and the services that it u
 | OPENSEA_API_KEY | API key for the OpenSea API | - |
 | OPENSEA_MONITORING_LOG_LEVEL | Log level for the application | INFO |
 | OPENSEA_MONITORING_SPARK_LOG_LEVEL | Log level for the Spark application | WARN |
+| OPENSEA_DATA_STREAM_ENV | Environment to use for collecting data from the OpenSea API. If set to `production`, the application will use the OpenSea mainnet API, otherwise it will use the testnet API. | `development` |
 
 ### Docker Compose
 
